@@ -113,6 +113,7 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
   <div class="brand">🦆 Gọi Tên Vui Nhộn</div>
   <button id="classBtn" class="classBtn lockable">👩‍🏫 <span id="classLabel">Lớp mẫu · 10 bạn</span></button>
   <div class="spacer"></div>
+  <button id="musicBtn" class="iconBtn">🎵 Nhạc nền</button>
   <button id="soundBtn" class="iconBtn">🔊 Âm thanh</button>
   <button id="fsBtn" class="iconBtn">⛶ Toàn màn hình</button>
 </header>
@@ -226,7 +227,7 @@ function defaultStore() {
   return {
     classes: [{ id, name: 'Lớp mẫu', mode: 'names', count: 30, text: SAMPLE.join('\n'), gender: {} }],
     activeId: id,
-    settings: { duration: 15, rest: true, voice: 'vi', sound: true },
+    settings: { duration: 15, rest: true, voice: 'vi', sound: true, music: true },
     called: {}
   };
 }
@@ -282,37 +283,159 @@ function randInt(n) { const a = new Uint32Array(1); crypto.getRandomValues(a); r
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = randInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 /* ================= Sound ================= */
-const SFX = {
-  ctx: null,
-  ok() { if (!store.settings.sound) return null; if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return null; } } if (this.ctx.state === 'suspended') this.ctx.resume(); return this.ctx; },
-  tone(f, dur, { type = 'sine', vol = .2, to = null, delay = 0, vib = 0 } = {}) {
-    const c = this.ok(); if (!c) return; const t = c.currentTime + delay;
-    const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t);
-    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
-    if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = 28; lg.gain.value = vib; l.connect(lg).connect(o.frequency); l.start(t); l.stop(t + dur); }
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + .015); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(c.destination); o.start(t); o.stop(t + dur + .05);
+// One AudioContext, two buses (sfx / music) into a compressor so loud moments don't clip.
+const AUD = {
+  ctx: null, sfx: null, music: null, noiseBuf: null,
+  get() {
+    if (!this.ctx) {
+      try {
+        const c = new (window.AudioContext || window.webkitAudioContext)();
+        const comp = c.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4; comp.connect(c.destination);
+        this.sfx = c.createGain(); this.sfx.gain.value = .9; this.sfx.connect(comp);
+        this.music = c.createGain(); this.music.gain.value = .34; this.music.connect(comp);
+        const b = c.createBuffer(1, c.sampleRate, c.sampleRate), d = b.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+        this.noiseBuf = b; this.ctx = c;
+      } catch (e) { return null; }
+    }
+    if (this.ctx.state === 'suspended') this.ctx.resume();
+    return this.ctx;
   },
-  noise(dur, { vol = .25, f = 1000, to = null, q = 1, delay = 0 } = {}) {
-    const c = this.ok(); if (!c) return; const t = c.currentTime + delay;
-    const b = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate), d = b.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    const s = c.createBufferSource(); s.buffer = b; const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
-    bp.frequency.setValueAtTime(f, t); if (to) bp.frequency.exponentialRampToValueAtTime(to, t + dur);
-    const g = c.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(bp).connect(g).connect(c.destination); s.start(t);
-  },
-  whistle() { this.tone(2300, .55, { vol: .12, vib: 90 }); },
-  splash(d = 0) { this.noise(.35, { vol: .25, f: 900, to: 300, q: .8, delay: d }); },
-  quack(d = 0) { this.tone(420, .16, { type: 'sawtooth', vol: .07, to: 260, delay: d }); this.tone(430, .12, { type: 'square', vol: .03, to: 300, delay: d + .03 }); },
-  ding() { this.tone(1320, .5, { vol: .12 }); this.tone(1980, .4, { vol: .06 }); },
-  bloop() { this.tone(700, .3, { vol: .15, to: 160 }); },
-  swoosh() { this.noise(1.4, { vol: .28, f: 300, to: 2400, q: 2 }); },
-  sparkle() { [0, .07, .14].forEach((d, i) => this.tone(1800 + i * 400, .25, { vol: .06, delay: d })); },
-  tick() { this.tone(900, .06, { type: 'square', vol: .05 }); },
-  fanfare() { [523, 659, 784, 1047].forEach((f, i) => this.tone(f, i === 3 ? .7 : .2, { type: 'triangle', vol: .18, delay: i * .13 })); },
-  drum(dur) { for (let t = 0; t < dur; t += .06) this.noise(.05, { vol: .12 + t / dur * .12, f: 180, q: .7, delay: t }); }
+  duck(on) { if (this.music) this.music.gain.setTargetAtTime(on ? .1 : .34, this.ctx.currentTime, .15); }
 };
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+// low-level voices, all scheduled at absolute time t on the given bus
+function voice(c, bus, { f, t, dur, type = 'sine', vol = .2, to = null, toAt = null, attack = .005, lp = null, vib = 0, vibRate = 28 }) {
+  const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t);
+  if (to) o.frequency.exponentialRampToValueAtTime(to, t + (toAt || dur));
+  if (vib) { const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = vibRate; lg.gain.value = vib; l.connect(lg).connect(o.frequency); l.start(t); l.stop(t + dur + .05); }
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  let out = o;
+  if (lp) { const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; o.connect(fl); out = fl; }
+  out.connect(g).connect(bus); o.start(t); o.stop(t + dur + .05);
+}
+function noiseVoice(c, bus, { t, dur, vol = .2, f = 1000, to = null, q = 1, type = 'bandpass', attack = .002 }) {
+  const s = c.createBufferSource(); s.buffer = AUD.noiseBuf; s.loop = true;
+  const fl = c.createBiquadFilter(); fl.type = type; fl.Q.value = q; fl.frequency.setValueAtTime(f, t);
+  if (to) fl.frequency.exponentialRampToValueAtTime(to, t + dur);
+  const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + attack); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(fl).connect(g).connect(bus); s.start(t, Math.random() * .5); s.stop(t + dur + .05);
+}
+const DRUM = {
+  kick(c, bus, t, v = .9) { voice(c, bus, { f: 150, to: 42, toAt: .12, t, dur: .22, vol: v }); },
+  snare(c, bus, t, v = .35) { noiseVoice(c, bus, { t, dur: .16, vol: v, f: 1800, type: 'highpass', q: .5 }); voice(c, bus, { f: 210, to: 160, t, dur: .1, vol: v * .5, type: 'triangle' }); },
+  hat(c, bus, t, v = .12, open = false) { noiseVoice(c, bus, { t, dur: open ? .14 : .04, vol: v, f: 7500, type: 'highpass', q: .7 }); },
+  clap(c, bus, t, v = .3) { [0, .012, .024].forEach(d => noiseVoice(c, bus, { t: t + d, dur: .09, vol: v, f: 1400, q: 1.2 })); }
+};
+
+const SFX = {
+  ok() { return store.settings.sound ? AUD.get() : null; },
+  run(fn) { const c = this.ok(); if (c) fn(c, AUD.sfx, c.currentTime); },
+  tone(f, dur, o = {}) { this.run((c, b, now) => voice(c, b, { f, dur, t: now + (o.delay || 0), ...o })); },
+  noise(dur, o = {}) { this.run((c, b, now) => noiseVoice(c, b, { dur, t: now + (o.delay || 0), ...o })); },
+  click() { this.tone(1400, .05, { type: 'triangle', vol: .08, to: 900 }); },
+  whistle() { this.tone(2300, .32, { vol: .12, vib: 90 }); this.tone(2300, .6, { vol: .13, vib: 90, delay: .38 }); },
+  cheer() {   // crowd "yay": swelling filtered noise + claps
+    this.run((c, b, now) => {
+      noiseVoice(c, b, { t: now, dur: 1.6, vol: .16, f: 900, to: 1600, q: .6, attack: .25 });
+      for (let i = 0; i < 18; i++) DRUM.clap(c, b, now + .1 + Math.random() * 1.3, .12 + Math.random() * .1);
+    });
+  },
+  applause() { this.run((c, b, now) => { for (let i = 0; i < 60; i++) DRUM.clap(c, b, now + Math.random() * 2.6, .08 + Math.random() * .12); noiseVoice(c, b, { t: now, dur: 2.8, vol: .1, f: 1500, q: .4, attack: .2 }); }); },
+  pop() { this.tone(500, .08, { to: 1300, vol: .14 }); },
+  wheee(d = 0) { this.run((c, b, now) => { const t = now + d, o = c.createOscillator(), g = c.createGain(); o.type = 'square';
+    o.frequency.setValueAtTime(520, t); o.frequency.linearRampToValueAtTime(1250, t + .22); o.frequency.exponentialRampToValueAtTime(420, t + .7);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.04, t + .03); g.gain.exponentialRampToValueAtTime(.0001, t + .7);
+    const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2200; o.connect(lp).connect(g).connect(b); o.start(t); o.stop(t + .75); }); },
+  splash(d = 0) { this.noise(.4, { vol: .26, f: 1100, to: 280, q: .8, delay: d }); this.noise(.12, { vol: .12, f: 4000, type: 'highpass', delay: d }); },
+  paddle() { this.noise(.07, { vol: .05 + Math.random() * .04, f: 700 + Math.random() * 600, q: 1.5 }); },
+  quack(d = 0, p = 1) { this.tone(420 * p, .16, { type: 'sawtooth', vol: .08, to: 260 * p, delay: d, lp: 1600 }); this.tone(430 * p, .12, { type: 'square', vol: .03, to: 300 * p, delay: d + .03, lp: 1400 }); },
+  leader() { this.tone(1319, .18, { type: 'triangle', vol: .12 }); this.tone(1976, .3, { type: 'triangle', vol: .12, delay: .08 }); this.noise(.25, { vol: .06, f: 600, to: 3000, q: 2 }); },
+  sparkle() { [0, .07, .14, .21, .28].forEach((d, i) => this.tone(1760 + i * 330, .3, { vol: .06, delay: d })); },
+  bloop() { this.tone(700, .3, { vol: .16, to: 160 }); },
+  bubbles() { for (let i = 0; i < 9; i++) this.tone(380 + Math.random() * 600, .09, { vol: .07, to: 900 + Math.random() * 500, delay: i * .1 + Math.random() * .05 }); },
+  sadTrombone() { [67, 66, 65].forEach((m, i) => this.tone(mtof(m - 12), .3, { type: 'sawtooth', vol: .1, lp: 1100, delay: .15 + i * .32 })); this.tone(mtof(64 - 12), 1.0, { type: 'sawtooth', vol: .1, lp: 1100, vib: 4, vibRate: 6, delay: 1.11 }); },
+  swoosh() { this.noise(1.6, { vol: .3, f: 250, to: 2600, q: 2.2 }); this.noise(1.2, { vol: .12, f: 3000, to: 400, q: 3, delay: .4 }); },
+  boing() { this.tone(180, .5, { type: 'triangle', vol: .2, to: 520, vib: 30, vibRate: 18 }); },
+  heartbeat() { this.run((c, b, now) => { DRUM.kick(c, b, now, .7); DRUM.kick(c, b, now + .16, .45); }); this.tone(1000, .06, { type: 'square', vol: .04 }); },
+  ding() { this.tone(1320, .5, { vol: .12 }); this.tone(1980, .4, { vol: .06 }); },
+  victory() {  // brass-ish fanfare with drums, then a held major chord
+    this.run((c, b, now) => {
+      const n = [[72, 0, .14], [72, .15, .14], [72, .3, .14], [76, .45, .5], [74, .98, .14], [76, 1.13, .14], [79, 1.28, 1.1]];
+      n.forEach(([m, d, dur]) => { voice(c, b, { f: mtof(m), t: now + d, dur, type: 'sawtooth', vol: .1, lp: 2600, attack: .02 }); voice(c, b, { f: mtof(m + 12), t: now + d, dur, type: 'square', vol: .035, lp: 3000, attack: .02 }); });
+      [60, 64, 67, 72].forEach(m => voice(c, b, { f: mtof(m), t: now + 1.28, dur: 1.4, type: 'triangle', vol: .08, attack: .03 }));
+      [0, .45, .98, 1.28].forEach(d => { DRUM.kick(c, b, now + d, .8); DRUM.hat(c, b, now + d, .1, true); });
+      for (let i = 0; i < 6; i++) DRUM.snare(c, b, now + .98 + i * .05, .12 + i * .04);
+      noiseVoice(c, b, { t: now + 1.28, dur: 1.5, vol: .1, f: 8000, type: 'highpass', q: .5 }); // cymbal
+    });
+  },
+  confettiPops() { for (let i = 0; i < 6; i++) this.noise(.08, { vol: .18, f: 2200, q: .8, delay: i * .07 + Math.random() * .04 }); }
+};
+
+/* ================= Background music ================= */
+// A tiny step sequencer (16 steps per bar, I–vi–IV–V in C). Modes: idle (chill), race (upbeat), tension (last seconds).
+const CHORDS = [{ root: 36, tri: [60, 64, 67] }, { root: 33, tri: [57, 60, 64] }, { root: 29, tri: [53, 57, 60] }, { root: 31, tri: [55, 59, 62] }];
+const _ = null;
+const MELODY = [
+  76, _, 79, _, 84, _, 79, _, 81, 79, 76, _, 74, _, 76, _,
+  72, _, 76, _, 81, _, 76, _, 79, 76, 72, _, 74, _, 76, _,
+  77, _, 81, _, 84, _, 81, _, 79, _, 77, _, 76, _, 74, _,
+  74, _, 79, _, 83, _, 86, _, 84, _, 83, _, 79, _, _, _];
+const BASS_IDLE = [0, _, _, _, _, _, 7, _, 12, _, _, _, 7, _, _, _];
+const Music = {
+  mode: null, step: 0, next: 0, timer: null, bpm: { idle: 100, race: 150, tension: 150 },
+  play(mode) {
+    if (this.mode === mode) return;
+    this.mode = mode; this.step = 0;
+    const c = AUD.ctx; if (c) this.next = c.currentTime + .06;
+    if (!this.timer) this.timer = setInterval(() => this.pump(), 25);
+    if (mode === 'tension' && c && store.settings.music) noiseVoice(c, AUD.music, { t: c.currentTime, dur: 3.2, vol: .25, f: 300, to: 5000, q: 1.5, attack: 2.8 });
+  },
+  stop() { this.mode = null; },
+  pump() {
+    const c = AUD.ctx; if (!c || !this.mode || c.state !== 'running') return;
+    const spb = 60 / this.bpm[this.mode] / 4;
+    if (this.next < c.currentTime - .05) this.next = c.currentTime + .02;   // tab was throttled: skip, don't burst
+    while (this.next < c.currentTime + .12) {
+      if (store.settings.music) this.note(this.step, this.next, spb);
+      this.next += spb; this.step++;
+    }
+  },
+  note(s, t, spb) {
+    const c = AUD.ctx, b = AUD.music, i = s % 16, bar = Math.floor(s / 16) % 4, ch = CHORDS[bar];
+    if (this.mode === 'idle') {
+      if (i === 0 || i === 10) DRUM.kick(c, b, t, .5);
+      if (i % 4 === 2) DRUM.hat(c, b, t, .06);
+      if (i === 8) DRUM.snare(c, b, t, .12);
+      if (BASS_IDLE[i] !== null) voice(c, b, { f: mtof(ch.root + 12 + BASS_IDLE[i]), t, dur: spb * 3, type: 'triangle', vol: .32 });
+      if ([0, 3, 6, 10, 12].includes(i)) ch.tri.forEach((m, k) => voice(c, b, { f: mtof(m), t: t + k * .012, dur: .35, type: 'triangle', vol: .07 }));
+      const m = MELODY[s % 64]; if (m && i % 4 === 0 && Math.floor(s / 64) % 2) voice(c, b, { f: mtof(m + 12), t, dur: .5, vol: .06 });
+      return;
+    }
+    if (this.mode === 'race') {
+      if (i % 4 === 0) DRUM.kick(c, b, t, .85);
+      if (i === 4 || i === 12) { DRUM.snare(c, b, t, .32); DRUM.clap(c, b, t, .12); }
+      DRUM.hat(c, b, t, i % 4 === 2 ? .13 : .05, i % 4 === 2);
+      if (i % 2 === 0) voice(c, b, { f: mtof(ch.root + (i % 4 === 2 ? 24 : 12)), t, dur: spb * 1.8, type: 'square', vol: .16, lp: 900 });
+      voice(c, b, { f: mtof(ch.tri[i % 3] + (i % 6 < 3 ? 0 : 12)), t, dur: spb * .9, type: 'triangle', vol: .045 });
+      const m = MELODY[s % 64];
+      if (m && s >= 32) { voice(c, b, { f: mtof(m), t, dur: spb * 1.7, type: 'square', vol: .07, lp: 3200 }); voice(c, b, { f: mtof(m + 12), t, dur: spb * 1.2, vol: .03 }); }
+      if (i === 15 && bar === 3) DRUM.snare(c, b, t, .2);
+      return;
+    }
+    if (this.mode === 'tension') {
+      const lift = Math.min(5, Math.floor(s / 8));        // climbs a semitone every half bar
+      if (i % 8 === 0) DRUM.kick(c, b, t, .9);
+      if (s >= 8 || i % 2 === 0) DRUM.snare(c, b, t, .1 + Math.min(.25, s * .006));
+      if (i % 2 === 0) voice(c, b, { f: mtof(31 + 12 + lift), t, dur: spb * 1.8, type: 'sawtooth', vol: .16, lp: 500 + s * 40 });
+      if (i % 4 === 0) [55, 59, 62, 65].forEach(m => voice(c, b, { f: mtof(m + lift), t, dur: spb * 3.5, type: 'triangle', vol: .035 }));
+    }
+  }
+};
+// browsers only allow audio after a user gesture
+['pointerdown', 'keydown'].forEach(ev => document.addEventListener(ev, function unlock() {
+  if (AUD.get()) { if (!Music.mode) Music.play(race && race.phase === 'run' ? 'race' : 'idle'); else Music.next = AUD.ctx.currentTime + .05; }
+}, { once: true }));
 
 /* ================= Speech ================= */
 function speak(name) {
@@ -321,6 +444,7 @@ function speak(name) {
   let text = name;
   if (v === 'en') text = name.replace(/^Số (\d+)$/, 'Number $1');
   const u = new SpeechSynthesisUtterance(text); u.lang = lang; u.rate = .9;
+  u.onstart = () => AUD.duck(true); u.onend = u.onerror = () => AUD.duck(false);
   const voice = speechSynthesis.getVoices().find(x => x.lang && x.lang.replace('_', '-').toLowerCase().startsWith(lang.slice(0, 2)));
   if (voice) u.voice = voice;
   speechSynthesis.cancel(); speechSynthesis.speak(u);
@@ -560,7 +684,7 @@ function startRace() {
   shuffle([...ducks]).forEach((d, k) => { d.slideAt = .35 + k * .17; });
   race = { T, S, TW, ducks, winner, decoy, t0: performance.now(), phase: 'run', leader: null, leaderAt: 0, banner: 'Các chú vịt trượt xuống máng nước!', confetti: [], cues: {}, lastTick: -1 };
   document.body.classList.add('running');
-  SFX.whistle();
+  SFX.whistle(); SFX.cheer(); Music.play('race');
   updateUI();
 }
 
@@ -579,13 +703,14 @@ function updateDuck(d, t) {
   // slide down chute
   if (t < d.slideAt) { d.hidden = true; return; }
   d.hidden = false;
+  cue('pop' + d.sp, () => { SFX.pop(); SFX.wheee(.04); });
   const ride = .75, sT = (t - d.slideAt) / ride;
   if (sT < 1) {
     const [x, y] = bezier(CHUTE, sT * sT), [x2, y2] = bezier(CHUTE, Math.min(1, sT * sT + .02));
     d.x = x; d.y = y + 6; d.rot = Math.atan2(y2 - y, x2 - x) * .7; d.pose = 'slide'; d.scale = .8 + .2 * Math.min(1, sT * 5);
     return;
   }
-  cue('splash' + d.sp, () => { addFx('splash_crown', CHUTE[3][0] + 10, CHUTE[3][1] + 8, 130, .5); SFX.splash(); if (Math.random() < .5) SFX.quack(.1); });
+  cue('splash' + d.sp, () => { addFx('splash_crown', CHUTE[3][0] + 10, CHUTE[3][1] + 8, 130, .5); SFX.splash(); if (Math.random() < .6) SFX.quack(.1, .8 + Math.random() * .5); });
   d.scale = 1;
   const exitT = d.slideAt + ride, blend = ease(clamp((t - exitT) / .9));
   let [x, y, p] = racePos(d, t);
@@ -624,24 +749,29 @@ function tickRace(now) {
   // leader tracking / banners
   if (t > r.S + .3 && te < -.25) {
     const lead = r.ducks.reduce((a, b) => (b.p || 0) > (a.p || 0) ? b : a);
-    if (lead !== r.leader && t - r.leaderAt > .45) { r.leader = lead; r.leaderAt = t; r.banner = '🏁 Dẫn đầu: ' + lead.name; SFX.ding(); }
+    if (lead !== r.leader && t - r.leaderAt > .45) { r.leader = lead; r.leaderAt = t; r.banner = '🏁 Dẫn đầu: ' + lead.name; SFX.leader(); }
+  }
+  if (t > r.S && te < 0) {   // ambient paddling and the odd quack while racing
+    if (Math.random() < .05) SFX.paddle();
+    if (Math.random() < .008) SFX.quack(0, .75 + Math.random() * .6);
   }
   if (r.decoy) {
-    if (te > -.6) cue('btn', () => { SFX.sparkle(); r.banner = '✨ Ơ kìa! Có chiếc nút lấp lánh…'; });
-    if (te > .5) cue('dive', () => { SFX.bloop(); SFX.splash(); addFx('splash_up', r.decoy.x + 50, r.decoy.y, 90, .5); r.banner = '🫧 ' + r.decoy.name + ' mải lặn theo chiếc nút!'; });
+    if (te > -.6) cue('btn', () => { SFX.sparkle(); Music.play('tension'); r.banner = '✨ Ơ kìa! Có chiếc nút lấp lánh…'; });
+    if (te > .5) cue('dive', () => { SFX.bloop(); SFX.splash(); SFX.bubbles(); SFX.sadTrombone(); addFx('splash_up', r.decoy.x + 50, r.decoy.y, 90, .5); r.banner = '🫧 ' + r.decoy.name + ' mải lặn theo chiếc nút!'; });
   }
-  if (te > .8) cue('whirl', () => { SFX.swoosh(); SFX.drum(2.3); r.banner = '🌀 Xoáy nước bất ngờ!!'; });
-  if (te > 1.7) cue('fly', () => { SFX.splash(); SFX.quack(); });
+  if (te > .8) cue('whirl', () => { SFX.swoosh(); SFX.bubbles(); if (!r.decoy) Music.play('tension'); r.banner = '🌀 Xoáy nước bất ngờ!!'; });
+  if (te > 1.7) cue('fly', () => { SFX.splash(); SFX.boing(); SFX.wheee(.1); SFX.quack(.3, 1.3); });
   // countdown ticks in the last 3 seconds
   const left = Math.ceil(r.T - t);
-  if (left <= 3 && left > 0 && left !== r.lastTick) { r.lastTick = left; SFX.tick(); }
+  if (left <= 3 && left > 0 && left !== r.lastTick) { r.lastTick = left; SFX.heartbeat(); }
   if (t >= r.T && r.phase === 'run') finishRace();
 }
 
 function finishRace() {
   const r = race; r.phase = 'done'; r.doneAt = r.now;
   r.banner = '🎉 ' + r.winner.name + ' chạm phao vàng!';
-  SFX.ding(); SFX.fanfare(); SFX.quack(.5);
+  Music.stop(); SFX.whistle(); SFX.victory(); SFX.confettiPops(); SFX.applause(); SFX.quack(.6, 1.2);
+  setTimeout(() => { if (race === r) Music.play('idle'); }, 3500);
   burstConfetti();
   const cls = activeClass(), list = calledOf(cls);
   list.push(r.winner.name); save();
@@ -788,7 +918,7 @@ function showResult(d) {
   resultEl.classList.remove('hidden');
 }
 function hideResult() { resultEl.classList.add('hidden'); }
-function continueGame() { hideResult(); race = null; makeIdle(); updateUI(); }
+function continueGame() { hideResult(); race = null; makeIdle(); Music.play('idle'); updateUI(); }
 document.getElementById('contBtn').onclick = continueGame;
 document.getElementById('sayBtn').onclick = () => race && speak(race.winner.name);
 
@@ -807,13 +937,16 @@ restChk.onchange = () => { store.settings.rest = restChk.checked; save(); update
 const voiceSel = document.getElementById('voiceSel');
 voiceSel.onchange = () => { store.settings.voice = voiceSel.value; save(); };
 document.getElementById('testBtn').onclick = () => {
-  SFX.ding(); SFX.quack(.4);
+  SFX.ding(); SFX.quack(.4); if (AUD.get() && !Music.mode) Music.play('idle');
   const v = store.settings.voice;
   if (v === 'off') toast('Đang tắt giọng đọc — chỉ phát hiệu ứng âm thanh');
   else speak(v === 'vi' ? 'Xin chào cả lớp' : 'Hello everyone');
 };
 const soundBtn = document.getElementById('soundBtn');
 soundBtn.onclick = () => { store.settings.sound = !store.settings.sound; save(); updateUI(); };
+const musicBtn = document.getElementById('musicBtn');
+musicBtn.onclick = () => { store.settings.music = !store.settings.music; save(); if (store.settings.music && AUD.get() && !Music.mode) Music.play('idle'); updateUI(); };
+document.addEventListener('click', e => { const b = e.target.closest('button'); if (b && b !== startBtn) SFX.click(); });
 document.getElementById('fsBtn').onclick = () => {
   const el = document.getElementById('stageWrap');
   if (document.fullscreenElement) document.exitFullscreen(); else el.requestFullscreen && el.requestFullscreen();
@@ -839,6 +972,7 @@ function updateUI() {
   [...durChips.children].forEach(b => b.classList.toggle('on', +b.dataset.s === store.settings.duration));
   restChk.checked = store.settings.rest; voiceSel.value = store.settings.voice;
   soundBtn.textContent = store.settings.sound ? '🔊 Âm thanh' : '🔇 Âm thanh'; soundBtn.classList.toggle('off', !store.settings.sound);
+  musicBtn.textContent = store.settings.music ? '🎵 Nhạc nền' : '🔕 Nhạc nền'; musicBtn.classList.toggle('off', !store.settings.music);
   const running = race && race.phase === 'run';
   startBtn.disabled = running || !pool.length;
   startBtn.textContent = running ? '⏳ Đang chọn…' : '▶ Bắt đầu chọn!';
