@@ -453,7 +453,7 @@ if ('speechSynthesis' in window) speechSynthesis.getVoices();
 
 /* ================= Assets ================= */
 const IMG = {};
-const ASSET_NAMES = ['buoy_gold', 'bubble', 'whirl', 'splash_crown', 'splash_up', 'splash_s', 'wave1', 'wave2', 'wave3', 'ripple_spark',
+const ASSET_NAMES = ['buoy_gold', 'buoy_red', 'tornado', 'splash_wave', 'bubble', 'whirl', 'splash_crown', 'splash_up', 'splash_s', 'wave1', 'wave2', 'wave3', 'ripple_spark',
   'turtle_idle', 'turtle_whistle', 'turtle_point', 'turtle_point2', 'turtle_shock', 'turtle_cheer',
   'float_a0', 'float_a1', 'float_a2', 'float_a3', 'float_b0', 'float_b1', 'float_b2', 'float_b3', 'float_c0', 'float_c1', 'float_c2', 'float_c3'];
 for (let i = 0; i < 10; i++) ASSET_NAMES.push('duck' + i + '_swim', 'duck' + i + '_dive', 'duck' + i + '_win');
@@ -650,6 +650,173 @@ function buildCurve(end, boosts, seed) {
 }
 const sampleCurve = (P, u) => { const K = P.length - 1, f = clamp(u) * K, i = Math.min(K - 1, f | 0); return P[i] + (P[i + 1] - P[i]) * (f - i); };
 
+/* ================= Finish twists ================= */
+// Every twist runs in the last 3.2 s (te = 0 → 3.2) and must land the winner on GOAL at te = 3.2.
+// The winner is already decided; a twist only changes how the reveal looks.
+const GOAL = [BUOY.x - 82, BUOY.y + 22];
+const quad = (a, b, c, k) => (1 - k) * (1 - k) * a + 2 * (1 - k) * k * b + k * k * c;
+function arcTo(sx, sy, ex, ey, k, lift = 30, bend = 0) {
+  const cx = (sx + ex) / 2 + bend, cy = Math.min(sy, ey) - lift;
+  return [quad(sx, cx, ex, k), quad(sy, cy, ey, k)];
+}
+function sprintToGoal(d, te, from, dur) {          // winner swims hard to the gold buoy
+  const k = ease(clamp((te - from) / dur));
+  const [x, y] = arcTo(d.sx, d.sy, GOAL[0], GOAL[1], k, 30);
+  if (k > 0 && k < 1) addTrail(x, y, race.now);
+  return [x, y, d.end + k * .2];
+}
+const dizzy = (d, te) => { d.rot = Math.sin(te * 9) * .3; };
+
+const TWISTS = {
+  // decoy dives after a shiny button, a whirlpool flings the real winner to the buoy
+  button: {
+    cues(r, te) {
+      if (r.decoy && te > -.6) cue('btn', () => { SFX.sparkle(); Music.play('tension'); r.banner = '✨ Ơ kìa! Có chiếc nút lấp lánh…'; });
+      if (r.decoy && te > .5) cue('dive', () => { SFX.bloop(); SFX.splash(); SFX.bubbles(); SFX.sadTrombone(); addFx('splash_up', r.decoy.x + 50, r.decoy.y, 90, .5); r.banner = '🫧 ' + r.decoy.name + ' mải lặn theo chiếc nút!'; });
+      if (te > .8) cue('whirl', () => { SFX.swoosh(); SFX.bubbles(); if (!r.decoy) Music.play('tension'); r.banner = '🌀 Xoáy nước bất ngờ!!'; });
+      if (te > 1.7) cue('fly', () => { SFX.splash(); SFX.boing(); SFX.wheee(.1); SFX.quack(.3, 1.3); });
+    },
+    duck(d, te, r) {
+      if (d === r.decoy) { const p = d.end + .035 * clamp(te / .5); if (te > .5) d.pose = 'dive'; return [START_X + p * RACE_LEN, d.laneY, p]; }
+      if (d !== r.winner) return null;
+      const p = d.end + .03 * clamp(te / .8); let x = START_X + p * RACE_LEN, y = d.laneY;
+      if (te > .8 && te <= 1.7) {
+        const k = (te - .8) / .9; d.rot = k * k * Math.PI * 4;
+        x += Math.cos(k * 12) * 14 * k; y += Math.sin(k * 12) * 10 * k;
+      } else if (te > 1.7) {
+        const k = ease(clamp((te - 1.7) / 1.5));
+        [x, y] = arcTo(x, y, GOAL[0], GOAL[1], k, 120, 40);
+        d.rot = (1 - k) * Math.PI * 4 % (Math.PI * 2) * (1 - k);
+        addTrail(x, y, r.now);
+      }
+      return [x, y, p];
+    },
+    render(r, te, t) {
+      if (r.decoy && te > -.6 && te < .9) drawShinyButton(START_X + (r.decoy.end + .05) * RACE_LEN + 20, r.decoy.laneY + 10, t, clamp((te + .6) / .3));
+      if (te > .8) {
+        const k = clamp((te - .8) / .4), fade = 1 - clamp((te - 2.4) / .8), w = r.winner;
+        ctx.save(); ctx.globalAlpha = fade;
+        ctx.translate(te > 1.7 ? START_X + (w.end + .03) * RACE_LEN : w.x, te > 1.7 ? w.laneY : w.y); ctx.scale(1, .45); ctx.rotate(-te * 7);
+        if (IMG.whirl) ctx.drawImage(IMG.whirl, -120 * k, -120 * k, 240 * k, 240 * k);
+        ctx.restore();
+      }
+    },
+    turtle: te => te > .5 ? 'turtle_shock' : null
+  },
+
+  // a big wave rolls in from behind; the winner surfs it to the buoy and knocks the leader into a spin
+  wave: {
+    waveAt(r, te) {
+      const w = r.winner;
+      if (te < 1) { const k = ease(clamp((te + .4) / 1.4)); return [lerp(START_X - 120, w.sx - 30, k), w.sy]; }
+      return [w.x - 30, w.y];
+    },
+    cues(r, te) {
+      if (te > -.4) cue('wave', () => { Music.play('tension'); SFX.swoosh(); r.banner = '🌊 Ơ kìa! Một con sóng lớn đang tới!'; });
+      if (te > 1) cue('surf', () => { SFX.splash(); SFX.wheee(); SFX.quack(.2, 1.3); r.banner = '🏄 Có bạn đang cưỡi sóng!!'; });
+      if (r.decoy && te > 2) cue('knock', () => { SFX.splash(); SFX.boing(); addFx('splash_crown', r.decoy.x, r.decoy.y + 10, 140, .5); });
+    },
+    duck(d, te, r) {
+      if (d === r.winner) {
+        if (te < 1) { const p = d.end + .01 * te; return [START_X + p * RACE_LEN, d.sy, p]; }
+        const k = ease(clamp((te - 1) / 2.2)); d.rot = -.12 * Math.sin(k * Math.PI);
+        const [x, y] = arcTo(d.sx, d.sy, GOAL[0], GOAL[1], k, 40);
+        addTrail(x, y, r.now); return [x, y, d.end + k * .2];
+      }
+      if (d === r.decoy) {
+        const k = ease(clamp((te - 2) / .8)), p = d.end + .03 * clamp(te / 1.2) - .06 * k;
+        if (te > 2) d.rot = k * Math.PI * 4 + (k >= 1 ? Math.sin(te * 9) * .3 : 0);
+        return [START_X + p * RACE_LEN, d.sy, p];
+      }
+      return null;
+    },
+    render(r, te, t) {
+      if (te < -.4) return;
+      const [x, y] = this.waveAt(r, te), a = clamp((te + .4) / .3) * (1 - clamp((te - 2.9) / .3));
+      drawImg('splash_wave', x - 40, y + 34 + Math.sin(t * 8) * 3, 230, { anchor: 'bottom', alpha: a });
+    },
+    turtle: te => te > .2 ? 'turtle_shock' : null
+  },
+
+  // a water tornado lifts the leader into the sky and drops it behind; the winner sprints through
+  tornado: {
+    cues(r, te) {
+      if (te > -.3) cue('torn', () => { Music.play('tension'); SFX.swoosh(); r.banner = '🌪️ Vòi rồng nước xuất hiện!'; });
+      if (te > .5) cue('lift', () => { SFX.wheee(); SFX.boing(); SFX.quack(.2, 1.4); r.banner = '😵 ' + r.decoy.name + ' bị cuốn bay lên trời!'; });
+      if (te > 1.8) cue('drop', () => { SFX.splash(); SFX.sadTrombone(); addFx('splash_crown', r.decoy.sx - 140, r.decoy.sy + 10, 150, .6); });
+      if (te > 2) cue('dash', () => { r.banner = '💨 Có bạn tăng tốc về đích!'; SFX.quack(0, 1.2); });
+    },
+    duck(d, te, r) {
+      if (d === r.winner) { if (te < .9) { const p = d.end + .012 * te; return [START_X + p * RACE_LEN, d.sy, p]; } return sprintToGoal(d, te, .9, 2.3); }
+      if (d !== r.decoy) return null;
+      if (te < .5) { const p = d.end + .02 * te; return [START_X + p * RACE_LEN, d.sy, p]; }
+      if (te < 1.8) { const k = (te - .5) / 1.3; d.rot = k * Math.PI * 6; return [d.sx + 10 + Math.sin(k * 10) * 22, d.sy - 230 * ease(k), d.end]; }
+      if (te < 2.2) { const k = (te - 1.8) / .4; d.rot = te * 12; return [lerp(d.sx + 10, d.sx - 140, k), d.sy - 230 + 230 * k * k, d.end - .1]; }
+      dizzy(d, te); return [d.sx - 140, d.sy, d.end - .14];
+    },
+    render(r, te, t) {
+      if (te < -.3 || te > 2.3) return;
+      const k = clamp((te + .3) / .4), fade = 1 - clamp((te - 1.8) / .5), d = r.decoy;
+      drawImg('tornado', d.sx + 10 + Math.sin(t * 5) * 10, d.sy + 40, 210 * (.4 + .6 * k), { anchor: 'bottom', alpha: fade });
+    },
+    turtle: te => te > .5 ? 'turtle_shock' : null
+  },
+
+  // the leader proudly touches a RED buoy, the referee points to the GOLD one, the winner gets there
+  wrongBuoy: {
+    redAt(r) {   // keep the red buoy well away from the gold one so the mix-up reads clearly
+      let y = r.decoy.laneY + 10;
+      if (Math.abs(y - BUOY.y) < 130) y = BUOY.y + (y < BUOY.y ? -140 : 140);
+      return [FINISH_X - 10, clamp(y, RIVER_TOP + 60, RIVER_BOT - 30)];
+    },
+    cues(r, te) {
+      if (te > -.5) cue('red', () => { Music.play('tension'); SFX.pop(); SFX.sparkle(); r.banner = '🔴 Một chiếc phao vừa nổi lên…'; });
+      if (te > 1) cue('touch', () => { SFX.ding(); SFX.quack(0, 1.3); r.banner = '🎉 ' + r.decoy.name + ' chạm phao…?'; });
+      if (te > 1.5) cue('wrong', () => { SFX.whistle(); SFX.sadTrombone(); r.banner = '❌ Ối! Phao ĐỎ chứ không phải phao VÀNG!'; });
+    },
+    duck(d, te, r) {
+      if (d === r.winner) { if (te < 1) { const p = d.end + .012 * te; return [START_X + p * RACE_LEN, d.sy, p]; } return sprintToGoal(d, te, 1, 2.2); }
+      if (d !== r.decoy) return null;
+      const [rx, ry] = this.redAt(r), k = ease(clamp(te / 1));
+      if (te > 1.5) dizzy(d, te); else if (te > 1) d.rot = Math.sin(te * 20) * .08;
+      return [lerp(d.sx, rx - 66, k), lerp(d.sy, ry + 2, k), d.end + .05 * k];
+    },
+    render(r, te, t) {
+      if (te < -.5) return;
+      const [x, y] = this.redAt(r), k = clamp((te + .5) / .3), pop = k < 1 ? 1.25 - .25 * k : 1;
+      drawImg('buoy_red', x, y + 18 + Math.sin(t * 2.4) * 3, 62 * k * pop, { anchor: 'bottom' });
+    },
+    turtle: te => te > 1.5 ? 'turtle_point' : te > 1 ? 'turtle_shock' : null
+  },
+
+  // no trick: a neck-and-neck sprint, the winner edges ahead at the very end
+  none: {
+    setup(r, decoys) { r.winner.end = .84; if (decoys[0]) decoys[0].end = .87; if (decoys[1]) decoys[1].end = .855; },
+    cues(r, te) {
+      if (te > -.4) cue('sprint', () => { Music.play('tension'); SFX.cheer(); r.banner = '🔥 Nước rút về đích — sát nút!!'; });
+      if (te > 2) cue('who', () => { r.banner = '😱 Ai sẽ chạm phao trước?'; });
+    },
+    duck(d, te, r) {
+      if (d === r.winner) {
+        const k = Math.pow(clamp(te / 3.2), 1.7), [x, y] = arcTo(d.sx, d.sy, GOAL[0], GOAL[1], k, 20);
+        if (te > 1.5) addTrail(x, y, r.now); return [x, y, d.end + k * .2];
+      }
+      const i = r.rivals.indexOf(d); if (i < 0) return null;
+      const k = 1 - Math.pow(1 - clamp(te / 2.9), 2), slot = r.rivalSlots[i];
+      const [x, y] = arcTo(d.sx, d.sy, slot[0], slot[1], k, 20);
+      return [x, y, d.end + k * .18];
+    },
+    render() {},
+    turtle: te => te > 2 ? 'turtle_shock' : null
+  }
+};
+function pickTwist(hasDecoy) {
+  if (!hasDecoy) return Math.random() < .5 ? 'none' : 'wave';
+  const roll = Math.random();
+  if (roll < .25) return 'none';
+  return ['button', 'wave', 'tornado', 'wrongBuoy'][Math.floor((roll - .25) / .1875) % 4];
+}
+
 function startRace() {
   if (race && race.phase !== 'done') return;
   const cls = activeClass(), pool = eligible(cls);
@@ -677,12 +844,18 @@ function startRace() {
   ducks.forEach(d => { d.end = .42 + Math.random() * .3; d.boosts = []; });
   winner.end = .76 + Math.random() * .04;
   if (decoy) decoy.end = .9;
+  const twistName = (decoy && window.FORCE_TWIST) || pickTwist(!!decoy), twist = TWISTS[twistName];
+  if (twist.setup) twist.setup({ winner }, decoys);
+  ducks.forEach(d => { d.sx = START_X + d.end * RACE_LEN; d.sy = d.laneY; });
+  const rivals = decoys.slice(0, 2).sort((a, b) => a.laneY - b.laneY);
+  const rivalSlots = rivals.length === 2 ? [[BUOY.x - 150, BUOY.y - 80], [BUOY.x - 165, BUOY.y + 95]]
+    : [[BUOY.x - 155, rivals[0] && rivals[0].laneY < BUOY.y ? BUOY.y - 80 : BUOY.y + 95]];
   leaders.forEach((d, j) => { d.boosts.push({ c: (j + .7) / (fakes + .2), w: .07, amp: 2.4 }); });
   if (decoy) decoy.boosts.push({ c: .9, w: .08, amp: 1.5 });
   ducks.forEach(d => { d.P = buildCurve(d.end, d.boosts, d.seed); });
   // slide order
   shuffle([...ducks]).forEach((d, k) => { d.slideAt = .35 + k * .17; });
-  race = { T, S, TW, ducks, winner, decoy, t0: performance.now(), phase: 'run', leader: null, leaderAt: 0, banner: 'Các chú vịt trượt xuống máng nước!', confetti: [], cues: {}, lastTick: -1 };
+  race = { T, S, TW, ducks, winner, decoy, twist, twistName, rivals, rivalSlots, t0: performance.now(), phase: 'run', leader: null, leaderAt: 0, banner: 'Các chú vịt trượt xuống máng nước!', confetti: [], cues: {}, lastTick: -1 };
   document.body.classList.add('running');
   SFX.whistle(); SFX.cheer(); Music.play('race');
   updateUI();
@@ -715,26 +888,8 @@ function updateDuck(d, t) {
   const exitT = d.slideAt + ride, blend = ease(clamp((t - exitT) / .9));
   let [x, y, p] = racePos(d, t);
   if (te > 0) {
-    if (d === r.decoy) {
-      p = d.end + .035 * clamp(te / .5); x = START_X + p * RACE_LEN;
-      if (te > .5) { d.pose = 'dive'; }
-    } else if (d === r.winner) {
-      p = d.end + .03 * clamp(te / .8); x = START_X + p * RACE_LEN;
-      if (te > .8 && te <= 1.7) {
-        const k = (te - .8) / .9; d.rot = k * k * Math.PI * 4;
-        x += Math.cos(k * 12) * 14 * k; y += Math.sin(k * 12) * 10 * k;
-      } else if (te > 1.7) {
-        const k = ease(clamp((te - 1.7) / 1.5));
-        const sx = x, sy = y, ex = BUOY.x - 82, ey = BUOY.y + 22;
-        const cx = (sx + ex) / 2 + 40, cy = Math.min(sy, ey) - 120;
-        x = (1 - k) * (1 - k) * sx + 2 * (1 - k) * k * cx + k * k * ex;
-        y = (1 - k) * (1 - k) * sy + 2 * (1 - k) * k * cy + k * k * ey;
-        d.rot = (1 - k) * Math.PI * 4 % (Math.PI * 2) * (1 - k);
-        d.trail = true;
-      }
-    } else {
-      p = d.end + .012 * te; x = START_X + p * RACE_LEN;
-    }
+    const o = r.twist.duck(d, te, r);
+    if (o) [x, y, p] = o; else { p = d.end + .012 * te; x = START_X + p * RACE_LEN; }
   }
   const ex = CHUTE[3][0] + 30, ey = CHUTE[3][1] + 10;
   d.x = lerp(ex, x, blend); d.y = lerp(ey, y, blend); d.p = p;
@@ -755,12 +910,7 @@ function tickRace(now) {
     if (Math.random() < .05) SFX.paddle();
     if (Math.random() < .008) SFX.quack(0, .75 + Math.random() * .6);
   }
-  if (r.decoy) {
-    if (te > -.6) cue('btn', () => { SFX.sparkle(); Music.play('tension'); r.banner = '✨ Ơ kìa! Có chiếc nút lấp lánh…'; });
-    if (te > .5) cue('dive', () => { SFX.bloop(); SFX.splash(); SFX.bubbles(); SFX.sadTrombone(); addFx('splash_up', r.decoy.x + 50, r.decoy.y, 90, .5); r.banner = '🫧 ' + r.decoy.name + ' mải lặn theo chiếc nút!'; });
-  }
-  if (te > .8) cue('whirl', () => { SFX.swoosh(); SFX.bubbles(); if (!r.decoy) Music.play('tension'); r.banner = '🌀 Xoáy nước bất ngờ!!'; });
-  if (te > 1.7) cue('fly', () => { SFX.splash(); SFX.boing(); SFX.wheee(.1); SFX.quack(.3, 1.3); });
+  r.twist.cues(r, te);
   // countdown ticks in the last 3 seconds
   const left = Math.ceil(r.T - t);
   if (left <= 3 && left > 0 && left !== r.lastTick) { r.lastTick = left; SFX.heartbeat(); }
@@ -818,27 +968,11 @@ function renderIdle(t) {
 function renderRace(t, dt) {
   const r = race, rt = r.now, te = rt - r.TW, done = r.phase === 'done';
   // turtle referee
-  const pose = done ? 'turtle_cheer' : te > .5 ? 'turtle_shock' : rt < 1.2 ? 'turtle_whistle' : (Math.floor(rt / 2) % 2 ? 'turtle_point' : 'turtle_point2');
+  const pose = done ? 'turtle_cheer' : (te > 0 && r.twist.turtle(te)) || (rt < 1.2 ? 'turtle_whistle' : (Math.floor(rt / 2) % 2 ? 'turtle_point' : 'turtle_point2'));
   drawTurtle(pose, t);
   if (!done) drawBuoy(t, te > 1.7);
   else drawImg('ripple_spark', BUOY.x, BUOY.y + 18, 230);
-  // shiny button the decoy chases
-  if (r.decoy && te > -.6 && !done) {
-    const bx = START_X + (r.decoy.end + .05) * RACE_LEN + 20, by = r.decoy.laneY + 10;
-    if (te < .9) drawShinyButton(bx, by, t, clamp((te + .6) / .3));
-  }
-  // whirlpool under the winner
-  if (te > .8 && te < 3.2 && !done) {
-    const k = clamp((te - .8) / .4), fade = 1 - clamp((te - 2.4) / .8);
-    const wx = r.winner.x, wy = r.winner.y;
-    ctx.save(); ctx.globalAlpha = fade; ctx.translate(te > 1.7 ? START_X + (r.winner.end + .03) * RACE_LEN : wx, te > 1.7 ? r.winner.laneY : wy); ctx.scale(1, .45); ctx.rotate(-te * 7);
-    const im = IMG.whirl; if (im) ctx.drawImage(im, -120 * k, -120 * k, 240 * k, 240 * k);
-    ctx.restore();
-  }
-  // wave trail when the current carries the winner
-  if (te > 1.7 && !done) {
-    addTrail(r.winner.x, r.winner.y, rt);
-  }
+  if (!done) r.twist.render(r, te, t);
   // fx
   (r.fx || []).forEach(f => { const k = (rt - f.t0) / f.dur; if (k >= 0 && k < 1) drawImg(f.img, f.x, f.y, f.w * (.6 + .4 * k), { alpha: 1 - k, anchor: 'bottom', rot: f.rot || 0 }); });
   if (r.fx) r.fx = r.fx.filter(f => rt - f.t0 < f.dur);
