@@ -104,6 +104,7 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
 .gchip{border:2px solid #b8dcf7;background:#eef8ff;border-radius:999px;padding:2px 10px;font-size:15px;font-weight:700;color:#1b5f8f}
 .gchip.f{border-color:#ffc2d6;background:#fff0f5;color:#b8336a}
 .done{border:0;background:var(--green);color:#fff;font-size:20px;font-weight:800;border-radius:14px;padding:8px 28px;box-shadow:0 4px 0 #23884a}
+.backup{margin-top:16px;padding:10px 12px;border:2px dashed var(--line);border-radius:14px;display:flex;flex-direction:column;gap:6px;font-size:15px}
 .sheetFoot{display:flex;justify-content:space-between;align-items:center;margin-top:16px;gap:10px;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:8px 18px;border-radius:999px;font-weight:600;z-index:60;animation:fade .2s}
 </style>
@@ -142,6 +143,7 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
       <div class="lab">Thời gian chọn</div>
       <div class="row" id="durChips"></div>
       <label class="check"><input type="checkbox" id="restChk"> Bạn đã được gọi thì nghỉ</label>
+      <label class="check"><input type="checkbox" id="calmChk"> Giảm chuyển động (không rung, không phóng to)</label>
       <div class="lab">Đọc tên</div>
       <div class="row">
         <select id="voiceSel">
@@ -209,6 +211,15 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
         <div class="note" style="margin-top:8px">Mẹo: gõ thêm <b>(nam)</b> hoặc <b>(nữ)</b> sau tên, ví dụ: <code>Bảo Anh (nữ)</code>.</div>
       </div>
     </div>
+    <div class="backup">
+      <div><b>💾 Sao lưu</b> — lưu tất cả lớp và danh sách đã gọi ra một file, để mang sang máy khác hoặc phòng khi trình duyệt bị xóa dữ liệu.</div>
+      <div class="row">
+        <button class="smallBtn add" id="exportBtn">⬇ Xuất file sao lưu</button>
+        <button class="smallBtn" id="importBackupBtn">⬆ Nhập file sao lưu</button>
+        <input type="file" id="backupIn" accept=".json,application/json" class="hidden">
+      </div>
+      <div class="note" id="backupNote"></div>
+    </div>
     <div class="sheetFoot">
       <button class="smallBtn danger" id="delClassBtn">Xóa lớp</button>
       <button class="done" id="doneBtn">Xong</button>
@@ -246,7 +257,7 @@ function defaultStore() {
   return {
     classes: [{ id, name: 'Lớp mẫu', mode: 'names', count: 30, text: SAMPLE.join('\n'), gender: {} }],
     activeId: id,
-    settings: { duration: 15, rest: true, voice: 'vi', sound: true, music: true },
+    settings: { duration: 15, rest: true, voice: 'vi', sound: true, music: true, calm: !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches) },
     called: {}
   };
 }
@@ -637,8 +648,18 @@ function drawBow(x, y, s) {
   ctx.beginPath(); ctx.arc(0, 0, 4.5, 0, 7); ctx.fill(); ctx.stroke();
   ctx.restore();
 }
+// long names: keep the last two words, then shrink the font, then cut with an ellipsis
+const TAG_MAX = 170;
+function fitTag(text) {
+  let t = text, size = 25;
+  ctx.font = `700 ${size}px "Baloo 2","Segoe UI",sans-serif`;
+  if (ctx.measureText(t).width > TAG_MAX) { const w = t.split(/\s+/); if (w.length > 2) t = w.slice(-2).join(' '); }
+  while (ctx.measureText(t).width > TAG_MAX && size > 19) { size -= 1; ctx.font = `700 ${size}px "Baloo 2","Segoe UI",sans-serif`; }
+  if (ctx.measureText(t).width > TAG_MAX) { while (t.length > 3 && ctx.measureText(t + '…').width > TAG_MAX) t = t.slice(0, -1); t = t.trimEnd() + '…'; }
+  return t;
+}
 function drawTag(text, xRight, y, lead) {
-  ctx.save(); ctx.font = '700 25px "Baloo 2","Segoe UI",sans-serif';
+  ctx.save(); text = fitTag(text);
   const w = ctx.measureText(text).width + 22, h = 34, x = xRight - w;
   ctx.fillStyle = lead ? '#ffd54a' : 'rgba(255,255,255,.95)';
   ctx.strokeStyle = lead ? '#c98a00' : 'rgba(29,53,87,.25)'; ctx.lineWidth = 2;
@@ -1123,6 +1144,17 @@ function charImg(av, pose, x, y, h, opt = {}) {
 }
 const curGame = () => store.settings.game || 'g1';
 const curImpl = () => GAME_IMPL[curGame()] || null;
+// after the visible game is ready, fetch the others one by one so switching is instant
+let preloading = false;
+function preloadGames() {
+  if (preloading) return; preloading = true;
+  const queue = Object.values(GAME_IMPL);
+  (function next() {
+    const g = queue.shift(); if (!g) return;
+    if (!g.loading) g.loading = loadImages(g.id, g.base, g.assets).then(() => { g.ready = true; updateUI(); });
+    g.loading.then(() => setTimeout(next, 300));
+  })();
+}
 function activateGame(id) {
   if (race && race.phase === 'run') return;
   store.settings.game = id; save();
@@ -1131,6 +1163,7 @@ function activateGame(id) {
   IMG = IMGSETS[id] = IMGSETS[id] || {};
   STINGS = loadStings(id, g ? g.base : 'assets/duck-race/');
   if (g && !g.loading) g.loading = loadImages(id, g.base, g.assets).then(() => { g.ready = true; updateUI(); });
+  (g ? g.loading : assetsReady).then(preloadGames);
   updateUI();
 }
 
@@ -1214,6 +1247,8 @@ document.querySelectorAll('#gameTabs .tab').forEach(b => b.onclick = () => { if 
 
 const durChips = document.getElementById('durChips');
 [10, 15, 20, 30].forEach(s => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = s + ' giây'; b.dataset.s = s; b.onclick = () => { store.settings.duration = s; save(); updateUI(); }; durChips.appendChild(b); });
+const calmChk = document.getElementById('calmChk');
+calmChk.onchange = () => { store.settings.calm = calmChk.checked; save(); };
 const restChk = document.getElementById('restChk');
 restChk.onchange = () => { store.settings.rest = restChk.checked; save(); updateUI(); };
 const voiceSel = document.getElementById('voiceSel');
@@ -1253,7 +1288,7 @@ function updateUI() {
   document.getElementById('classLabel').textContent = cls.name + ' · ' + all.length + ' bạn';
   [...durChips.children].forEach(b => b.classList.toggle('on', +b.dataset.s === store.settings.duration));
   document.querySelectorAll('#gameTabs .tab').forEach(b => b.classList.toggle('active', b.dataset.game === curGame()));
-  restChk.checked = store.settings.rest; voiceSel.value = store.settings.voice;
+  restChk.checked = store.settings.rest; calmChk.checked = !!store.settings.calm; voiceSel.value = store.settings.voice;
   soundBtn.textContent = store.settings.sound ? '🔊 Âm thanh' : '🔇 Âm thanh'; soundBtn.classList.toggle('off', !store.settings.sound);
   musicBtn.textContent = store.settings.music ? '🎵 Nhạc nền' : '🔕 Nhạc nền'; musicBtn.classList.toggle('off', !store.settings.music);
   const running = race && race.phase === 'run';
@@ -1274,7 +1309,7 @@ function toast(msg) { const t = document.createElement('div'); t.className = 'to
 /* ================= Class page ================= */
 const page = document.getElementById('classPage');
 let draft = null, editId = null;
-function openClasses() { if (race && race.phase === 'run') return; draft = JSON.parse(JSON.stringify(store.classes)); editId = store.activeId; page.classList.remove('hidden'); renderClassPage(); }
+function openClasses() { if (race && race.phase === 'run') return; draft = JSON.parse(JSON.stringify(store.classes)); editId = store.activeId; page.classList.remove('hidden'); renderClassPage(); backupNote(); }
 function closeClasses() {
   if (!draft) return;
   store.classes = draft; store.activeId = editId;
@@ -1285,6 +1320,48 @@ function closeClasses() {
 }
 document.getElementById('classBtn').onclick = openClasses;
 document.getElementById('doneBtn').onclick = closeClasses;
+
+// ---- backup: every class plus who has been called, as one JSON file ----
+const BACKUP_APP = 'goi-ten-vui-nhon';
+function backupNote() {
+  const el = document.getElementById('backupNote');
+  el.textContent = store.lastBackup ? 'Lần sao lưu gần nhất: ' + new Date(store.lastBackup).toLocaleString('vi-VN') : 'Chưa sao lưu lần nào trên máy này.';
+}
+document.getElementById('exportBtn').onclick = () => {
+  const data = { app: BACKUP_APP, version: 1, savedAt: new Date().toISOString(), classes: draft, called: store.called, activeId: editId };
+  const blob = new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'goi-ten-vui-nhon-sao-luu-' + new Date().toISOString().slice(0, 10) + '.json';
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  store.lastBackup = Date.now(); save(); backupNote(); toast('Đã xuất file sao lưu');
+};
+document.getElementById('importBackupBtn').onclick = () => document.getElementById('backupIn').click();
+document.getElementById('backupIn').onchange = e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    let data; try { data = JSON.parse(rd.result); } catch (err) { data = null; }
+    if (!data || data.app !== BACKUP_APP || !Array.isArray(data.classes)) { toast('File này không phải file sao lưu của Gọi Tên Vui Nhộn'); return; }
+    // keep only the fields we know, with safe types
+    const clean = data.classes.filter(c => c && typeof c === 'object').map(c => ({
+      id: typeof c.id === 'string' && c.id ? c.id.slice(0, 20) : uid(),
+      name: String(c.name || 'Lớp').slice(0, 40), mode: c.mode === 'numbers' ? 'numbers' : 'names',
+      count: clamp(parseInt(c.count) || 30, 2, 50), text: String(c.text || '').slice(0, 20000),
+      gender: Object.fromEntries(Object.entries(c.gender && typeof c.gender === 'object' ? c.gender : {}).filter(([, v]) => v === 'm' || v === 'f'))
+    }));
+    if (!clean.length) { toast('File sao lưu không có lớp nào'); return; }
+    // classes with the same id are replaced, the rest are added
+    for (const c of clean) {
+      const i = draft.findIndex(x => x.id === c.id);
+      if (i >= 0) draft[i] = c; else draft.push(c);
+      const called = data.called && Array.isArray(data.called[c.id]) ? data.called[c.id].map(String) : [];
+      store.called[c.id] = called;
+    }
+    editId = clean[0].id; save(); renderClassPage();
+    toast('Đã nhập ' + clean.length + ' lớp từ file sao lưu');
+  };
+  rd.readAsText(f, 'utf-8');
+};
 const ed = () => draft.find(c => c.id === editId);
 function renderClassPage(keepText) {
   const c = ed();

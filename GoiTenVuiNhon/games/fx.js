@@ -161,6 +161,7 @@ const CAM = (() => {
       else if (r.phase === 'run' && r.now > r.TW - 2.5) {        // gentle push-in during the final countdown
         const k = clamp((r.now - r.TW + 2.5) / 2.5); c.tx = SW / 2; c.ty = SH / 2 + 20; c.tz = 1 + .05 * k;
       }
+      if (store.settings.calm) { c.tz = 1; c.shake = 0; }          // reduced motion: no zoom, no shake
       const e = 1 - Math.exp(-dt * 4.5);
       c.x += (c.tx - c.x) * e; c.y += (c.ty - c.y) * e; c.z += (c.tz - c.z) * e;
       c.shake *= Math.exp(-dt * 7);
@@ -173,7 +174,7 @@ const CAM = (() => {
     // smoothly zoom towards something with x/y (it keeps following it as it moves)
     follow(r, obj, z = 1.25) { const c = cam(r); c.follow = obj; c.tz = z; },
     release(r) { const c = cam(r); c.follow = null; c.tx = SW / 2; c.ty = SH / 2; c.tz = 1; },
-    shake(r, px = 10) { const c = cam(r); c.shake = Math.max(c.shake, px); },
+    shake(r, px = 10) { if (store.settings.calm) return; const c = cam(r); c.shake = Math.max(c.shake, px); },
     slow(r, seconds = .5, factor = .35) { r.slowUntil = performance.now() + seconds * 1000; r.slowF = factor; },
     // standard reactions for the shared outcome moments
     react(r, kind, who) {
