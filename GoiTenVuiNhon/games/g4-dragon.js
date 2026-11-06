@@ -1,0 +1,135 @@
+// Game 04 — Rồng giữ kho báu
+// Ten treasure chests stand for ten students; they hop and swap places, the dragon sniffs around and opens one.
+// Twist: the first chest only holds a rubber duck; the dragon sneezes and the real winning chest slides out of the gold.
+(() => {
+  const SLABS = [[537, 486], [720, 486], [907, 486], [1084, 486], [337, 532], [1256, 532], [427, 610], [671, 610], [929, 610], [1171, 610]];
+  const STAGE = [800, 790], CHEST_W = 128, SWAP = .55;
+
+  // replay swaps up to time t: returns {x, y, lift} for each player
+  function layout(r, t) {
+    const slot = r.players.map(p => p.slot0), out = new Map();
+    let moving = null;
+    for (const s of r.swaps) {
+      if (t >= s.at + SWAP) { const a = slot[s.a]; slot[s.a] = slot[s.b]; slot[s.b] = a; }
+      else if (t >= s.at) moving = s;
+    }
+    r.players.forEach((p, i) => {
+      let [x, y] = SLABS[slot[i]], lift = 0;
+      if (moving && (i === moving.a || i === moving.b)) {
+        const other = i === moving.a ? moving.b : moving.a, k = ease((t - moving.at) / SWAP);
+        const [x2, y2] = SLABS[slot[other]];
+        x = lerp(x, x2, k); y = lerp(y, y2, k); lift = Math.sin(k * Math.PI) * (i === moving.a ? 90 : 40);
+      }
+      out.set(p, { x, y, lift });
+    });
+    return out;
+  }
+
+  GAME_IMPL.g4 = {
+    id: 'g4', title: 'Rồng giữ kho báu', base: 'assets/g4/', titleY: 330,
+    assets: gAssets(['twist', 'win'], ['dragon_01', 'dragon_02', 'dragon_03', 'dragon_04', 'dragon_05', 'dragon_06', 'dragon_07',
+      'chest_01', 'chest_02', 'chest_03', 'chest_04', 'chest_05', 'chest_06', 'chest_07', 'chest_08', 'chest_09', 'chest_10',
+      'rubber_duck', 'gold_coins', 'sneeze_smoke', 'winner_spotlight', 'giant_key']),
+    startBanner: '💰 Các rương kho báu nhảy múa đổi chỗ!',
+
+    setup(r) {
+      const slots = spread(r.players.length);
+      r.players.forEach((p, i) => { p.i = i; p.slot0 = slots[i]; p.chest = 'chest_' + String(i % 10 + 1).padStart(2, '0'); });
+      r.swaps = [];
+      const n = r.players.length;
+      if (n > 1) for (let at = .8; at < r.TW - .9; at += .75) {
+        const a = randInt(n); let b = randInt(n - 1); if (b >= a) b++;
+        r.swaps.push({ at, a, b });
+      }
+      r.fakes = makeFakes(r, 1.4);
+      r.final = layout(r, r.TW);
+    },
+
+    // where the dragon stands, and in which pose
+    dragon(r, rt, te, f) {
+      const done = r.phase === 'done';
+      if (done) return { x: STAGE[0] + 250, y: STAGE[1] + 10, pose: 'dragon_07' };
+      const at = p => { const o = r.final.get(p); return { x: o.x + 120, y: o.y + 70 }; };
+      if (te >= 0) {
+        const D = r.decoy, Wn = r.winner;
+        if (r.plain) {
+          if (te < 1) return { ...at(D || Wn), pose: te < .8 ? 'dragon_02' : 'dragon_01' };
+          const o = at(Wn); return { ...o, pose: te < 1.3 ? 'dragon_04' : 'dragon_01' };
+        }
+        if (te < 1.1) return { ...at(D), pose: te < .6 ? 'dragon_03' : 'dragon_01' };
+        if (te < 1.6) return { ...at(D), pose: 'dragon_05' };
+        return { ...at(D), pose: 'dragon_06' };
+      }
+      if (f) { const o = layout(r, rt).get(f.p); return { x: o.x + 120, y: o.y + 70, pose: 'dragon_02' }; }
+      return { x: 800 + Math.sin(rt * .6) * 520, y: 770, pose: 'dragon_01', flip: Math.cos(rt * .6) < 0 };
+    },
+
+    tick(r, t, te) {
+      const f = activeFake(r, t), D = r.decoy, Wn = r.winner;
+      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🐉 Rồng đánh hơi rương của ' + f.p.name + '…'; SFX.leader(); });
+      for (const s of r.swaps) if (t > s.at && te < 0) cue('sw' + s.at, () => SFX.tone(500, .12, { type: 'triangle', vol: .08, to: 900 }));
+      if (!r.plain) {
+        if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D); r.banner = '🐉 Rồng mở rương của ' + D.name + '!'; });
+        if (te > .6) cue('b', () => { outcome('wrong_turn', D); SFX.quack(0, 2.2); SFX.quack(.2, 2.5); SFX.sadTrombone(); r.banner = '🦆 Ơ! Trong rương chỉ có vịt cao su!'; });
+        if (te > 1.1) cue('c', () => { SFX.noise(.25, { vol: .2, f: 400, to: 1800, q: 1 }); SFX.noise(.5, { vol: .35, f: 2500, to: 500, q: .7, delay: .3 }); r.banner = '🤧 Hắt… XÌÌÌ!'; });
+        if (te > 1.5) cue('d', () => { outcome('selected', Wn); SFX.wheee(); r.banner = '✨ Một chiếc rương trượt ra khỏi đống vàng!'; });
+      } else {
+        if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🐉 Rồng ngửi rương của ' + (D || Wn).name + '…'; });
+        if (te > .8) cue('b', () => { SFX.boing(); r.banner = '🙅 …không phải rương này!'; });
+        if (te > 1.1) cue('c', () => { outcome('selected', Wn); SFX.sparkle(); r.banner = '🐉 Rồng chọn được rương rồi!'; });
+      }
+      if (te > 2.7) cue('open', () => { SFX.sparkle(); SFX.pop(); });
+    },
+
+    render(r, t) {
+      const rt = r.now, te = rt - r.TW, done = r.phase === 'done', f = activeFake(r, rt), D = r.decoy, Wn = r.winner;
+      const lay = te < 0 ? layout(r, rt) : r.final, slide = r.plain ? 1.3 : 1.5;
+      if (!r.plain && te > 1.1 && !done) {    // coins scattered by the sneeze
+        const k = clamp((te - 1.1) / 1.2);
+        drawImg('gold_coins', 1440, 470 - k * 40, 200, { alpha: 1 - k * .6 });
+        drawImg('gold_coins', 180, 460 - k * 50, 180, { alpha: 1 - k * .6 });
+      }
+      if (te > slide || done) drawImg('winner_spotlight', STAGE[0], STAGE[1] + 10, 260, { anchor: 'bottom', alpha: .8 });
+      // dragon goes behind the chests so name tags stay readable
+      const dg = this.dragon(r, rt, te, f);
+      drawImg(dg.pose, dg.x, dg.y - 40, 210, { anchor: 'bottom', flip: dg.flip });
+      if (!r.plain && te > 1.1 && te < 2.2) drawImg('sneeze_smoke', dg.x - 150, dg.y - 160, 220 * clamp((te - 1.1) / .3), { alpha: 1 - clamp((te - 1.7) / .5) });
+      const order = [...r.players].sort((a, b) => lay.get(a).y - lay.get(b).y);
+      for (const p of order) {
+        let { x, y, lift } = lay.get(p), wiggle = 0, chest = true;
+        if (p === Wn && (te > slide || done)) continue;
+        if (f && f.p === p && te < 0) wiggle = Math.sin(rt * 30) * .1;
+        if (te > 0 && te < (r.plain ? .8 : .6) && p === (D || Wn)) wiggle = Math.sin(rt * 34) * .12;
+        if (p === D && !r.plain && te > .6) {          // opened: rubber duck
+          const k = clamp((te - .6) / .3);
+          charImg(p.av, 'twist', x, y + 14, 150);
+          drawImg('rubber_duck', x + 40, y - 120 - k * 30 - Math.abs(Math.sin(rt * 6)) * 10, 70, { anchor: 'bottom' });
+          chest = false;
+        }
+        if (chest) drawImg(p.chest, x, y + 14 - lift, CHEST_W, { anchor: 'bottom', rot: wiggle });
+        p.x = x; p.y = y - 30;
+        tagC(p.name, x, y + 34 - lift, (f && f.p === p && te < 0));
+      }
+      // winning chest sliding out to the front
+      if (!done && te > slide) {
+        const o = r.final.get(Wn), k = ease(clamp((te - slide) / 1)), x = lerp(o.x, STAGE[0], k), y = lerp(o.y, STAGE[1], k);
+        Wn.x = x; Wn.y = y - 40;
+        if (te < 2.7) drawImg(Wn.chest, x, y, CHEST_W * (1 + k * .4), { anchor: 'bottom', rot: Math.sin(rt * 20) * .04 * (1 - k) });
+        else charImg(Wn.av, 'win', x, y + 10, 220);
+        tagC(Wn.name, x, y + 30, true);
+      }
+      if (done) {
+        const k = clamp((rt - r.doneAt) / .4);
+        charImg(Wn.av, 'win', STAGE[0], STAGE[1] + 10, 260 * (.6 + .4 * ease(k)));
+        tagC(Wn.name, STAGE[0], STAGE[1] + 34, true);
+      }
+    },
+
+    idle(t) {
+      SLABS.forEach(([x, y], i) => drawImg('chest_' + String(i + 1).padStart(2, '0'), x, y + 14 - Math.abs(Math.sin(t * 2 + i)) * 6, CHEST_W, { anchor: 'bottom' }));
+      drawImg('dragon_01', 800 + Math.sin(t * .6) * 520, 770, 230, { anchor: 'bottom', flip: Math.cos(t * .6) < 0 });
+    },
+    winBanner: r => '💎 Kho báu thuộc về ' + r.winner.name + '!',
+    winPos: () => ({ x: STAGE[0], y: STAGE[1] - 130 })
+  };
+})();

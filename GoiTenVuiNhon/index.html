@@ -217,6 +217,24 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
 </div>
 
 <script>
+// Shared helpers for games 2-6 (each game registers itself in GAME_IMPL)
+window.GAME_IMPL = {};
+const COMMON_ASSETS = ['bg', 'name_plate', 'vfx_almost_selected', 'vfx_selected', 'vfx_wrong_turn', 'vfx_win'];
+const gAssets = (poses, extra) => [...COMMON_ASSETS, ...extra, ...[...Array(10).keys()].flatMap(i => poses.map(p => 'c' + i + '_' + p))];
+const spread = (n, total = 10) => [...Array(n)].map((_, k) => Math.floor(k * total / n));        // n slots spread over total
+// near-misses before the reveal: who gets teased and when
+function makeFakes(r, from) {
+  const k = r.T <= 10 ? 2 : r.T <= 15 ? 3 : r.T <= 20 ? 4 : 5, span = r.TW - from - .5, pool = r.decoys.length ? r.decoys : [r.winner];
+  return [...Array(k)].map((_, j) => ({ at: from + (j + .15) * span / k, dur: Math.min(1.2, span / k * .75), p: j === 0 && Math.random() < .3 ? r.winner : pool[(j + 1) % pool.length] }));
+}
+const activeFake = (r, t) => (r.fakes || []).find(f => t >= f.at && t < f.at + f.dur) || null;
+</script>
+<script src="games/g2-eggs.js"></script>
+<script src="games/g3-cauldron.js"></script>
+<script src="games/g4-dragon.js"></script>
+<script src="games/g5-robots.js"></script>
+<script src="games/g6-hotel.js"></script>
+<script>
 'use strict';
 /* ================= Storage ================= */
 const LS_KEY = 'goiTenVuiNhon.v1';
@@ -329,8 +347,14 @@ const DRUM = {
 };
 
 // recorded outcome stings from the asset pack (HTMLAudio so they also play from file://)
-const STINGS = {};
-['almost_selected', 'selected', 'wrong_turn', 'win'].forEach(n => { const a = new Audio('assets/duck-race/sfx_' + n + '.wav'); a.preload = 'auto'; STINGS[n] = a; });
+const STINGSETS = {};
+function loadStings(set, base) {
+  if (STINGSETS[set]) return STINGSETS[set];
+  const s = STINGSETS[set] = {};
+  ['almost_selected', 'selected', 'wrong_turn', 'win'].forEach(n => { const a = new Audio(base + 'sfx_' + n + '.wav'); a.preload = 'auto'; s[n] = a; });
+  return s;
+}
+let STINGS = loadStings('g1', 'assets/duck-race/');
 const SFX = {
   sting(n, vol = .9) { if (!store.settings.sound || !STINGS[n]) return; const a = STINGS[n].cloneNode(); a.volume = vol; a.play().catch(() => {}); },
   ok() { return store.settings.sound ? AUD.get() : null; },
@@ -456,7 +480,14 @@ function speak(name) {
 if ('speechSynthesis' in window) speechSynthesis.getVoices();
 
 /* ================= Assets ================= */
-const IMG = {};
+const IMGSETS = { g1: {} };
+let IMG = IMGSETS.g1;          // images of the game being shown
+function loadImages(set, base, names) {
+  const dict = IMGSETS[set] = IMGSETS[set] || {};
+  return Promise.all(names.map(n => dict[n] ? 0 : new Promise(res => {
+    const im = new Image(); im.onload = () => { dict[n] = im; res(); }; im.onerror = res; im.src = base + n + '.webp';
+  })));
+}
 const ASSET_NAMES = ['name_plate', 'vfx_almost_selected', 'vfx_selected', 'vfx_wrong_turn', 'vfx_win', 'buoy_gold', 'buoy_red', 'tornado', 'splash_wave', 'bubble', 'whirl', 'splash_crown', 'splash_up', 'splash_s', 'wave1', 'wave2', 'wave3', 'ripple_spark',
   'turtle_idle', 'turtle_whistle', 'turtle_point', 'turtle_point2', 'turtle_shock', 'turtle_cheer',
   'float_a0', 'float_a1', 'float_a2', 'float_a3', 'float_b0', 'float_b1', 'float_b2', 'float_b3', 'float_c0', 'float_c1', 'float_c2', 'float_c3'];
@@ -464,9 +495,7 @@ for (let i = 0; i < 10; i++) ASSET_NAMES.push('duck' + i + '_swim', 'duck' + i +
 // head position (fraction of width/height) on each swim sprite, used to place the bow
 const HEAD = [[.593, .004], [.648, .005], [.626, .006], [.6, .005], [.525, 0], [.595, .005], [.61, 0], [.605, .004], [.632, .007], [.647, .005]];
 const FLOATS = ['float_a0', 'float_a1', 'float_a2', 'float_a3', 'float_b0', 'float_b1', 'float_b2', 'float_b3', 'float_c0', 'float_c1', 'float_c2', 'float_c3'];
-const assetsReady = Promise.all(ASSET_NAMES.map(n => new Promise(res => {
-  const im = new Image(); im.onload = () => { IMG[n] = im; res(); }; im.onerror = res; im.src = 'assets/duck-race/' + n + '.webp';
-})));
+const assetsReady = loadImages('g1', 'assets/duck-race/', ASSET_NAMES);
 
 /* ================= Stage / scene ================= */
 const W = 1600, H = 900;
@@ -830,6 +859,7 @@ function startRace() {
   const winnerStu = pool[randInt(pool.length)];                    // decided now, everything after is show
   const others = shuffle(pool.filter(s => s !== winnerStu)).slice(0, 9);
   const racers = shuffle([winnerStu, ...others]);
+  if (curImpl()) return startGeneric(cls, T, winnerStu, racers);
   const sprites = shuffle([...Array(10).keys()]);
   const n = racers.length;
   const span = Math.min(62, (RIVER_BOT - RIVER_TOP - 120) / Math.max(n - 1, 1));
@@ -909,6 +939,7 @@ function addFx(img, x, y, w, dur, opt = {}) { race.fx = race.fx || []; race.fx.p
 function tickRace(now) {
   const r = race; const t = (now - r.t0) / 1000; r.now = t;
   const te = t - r.TW;
+  if (r.game) { r.game.tick(r, t, te); countdown(r, t); return; }
   r.ducks.forEach(d => updateDuck(d, t));
   // leader tracking / banners
   if (t > r.S + .3 && te < -.25) {
@@ -920,7 +951,9 @@ function tickRace(now) {
     if (Math.random() < .008) SFX.quack(0, .75 + Math.random() * .6);
   }
   r.twist.cues(r, te);
-  // countdown ticks in the last 3 seconds
+  countdown(r, t);
+}
+function countdown(r, t) {   // heartbeat in the last 3 seconds, then finish
   const left = Math.ceil(r.T - t);
   if (left <= 3 && left > 0 && left !== r.lastTick) { r.lastTick = left; SFX.heartbeat(); }
   if (t >= r.T && r.phase === 'run') finishRace();
@@ -928,11 +961,11 @@ function tickRace(now) {
 
 function finishRace() {
   const r = race; r.phase = 'done'; r.doneAt = r.now;
-  r.banner = '🎉 ' + r.winner.name + ' chạm phao vàng!';
-  Music.stop(); SFX.whistle(); SFX.victory(); SFX.confettiPops(); SFX.applause(); SFX.quack(.6, 1.2);
+  r.banner = r.game ? r.game.winBanner(r) : '🎉 ' + r.winner.name + ' chạm phao vàng!';
+  Music.stop(); SFX.whistle(); SFX.victory(); SFX.confettiPops(); SFX.applause(); if (!r.game) SFX.quack(.6, 1.2);
   setTimeout(() => { if (race === r) Music.play('idle'); }, 3500);
   burstConfetti();
-  r.fx = r.fx || []; r.fx.push({ atlas: 'vfx_win', duck: { x: BUOY.x - 20, y: BUOY.y - 30 }, w: 380, t0: r.now, dur: 1.4 }); SFX.sting('win');
+  r.fx = r.fx || []; r.fx.push({ atlas: 'vfx_win', duck: r.game ? r.game.winPos(r) : { x: BUOY.x - 20, y: BUOY.y - 30 }, w: 380, t0: r.now, dur: 1.4 }); SFX.sting('win');
   const cls = activeClass(), list = calledOf(cls);
   list.push(r.winner.name); save();
   document.body.classList.remove('running');
@@ -955,6 +988,8 @@ function frame(now) {
   const dt = Math.min(.05, (now - lastNow) / 1000); lastNow = now;
   const t = now / 1000;
   ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  const impl = curImpl();
+  if (impl) { renderGeneric(impl, now, t, dt); requestAnimationFrame(frame); return; }
   if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0); else { ctx.fillStyle = '#3db5e6'; ctx.fillRect(0, 0, W, H); }
   drawWater(t);
   if (race) {
@@ -968,11 +1003,14 @@ function renderIdle(t) {
   drawBuoy(t, false);
   drawTurtle('turtle_idle', t);
   idleDucks.forEach((d, i) => drawSwimDuck(d, d.x + Math.sin(t * .6 + i) * 20, d.y + Math.cos(t * .5 + i) * 6, t, { wake: false }));
+  idleOverlay('Đua vịt cầu trượt', t);
+}
+function idleOverlay(title, t, y = 420) {
   const pool = eligible(activeClass()).length;
   banner(pool ? 'Bấm ▶ Bắt đầu chọn! hoặc phím Space' : 'Cả lớp đã được gọi hết! Bấm ↺ Làm lại từ đầu', t);
   ctx.save(); ctx.font = '800 64px "Baloo 2","Segoe UI",sans-serif'; ctx.textAlign = 'center';
-  ctx.lineWidth = 10; ctx.strokeStyle = '#1b6f9c'; ctx.fillStyle = '#fff';
-  ctx.strokeText('Đua vịt cầu trượt', 820, 420); ctx.fillText('Đua vịt cầu trượt', 820, 420); ctx.restore();
+  ctx.lineWidth = 10; ctx.strokeStyle = '#1b3a5c'; ctx.fillStyle = '#fff';
+  ctx.strokeText(title, 800, y); ctx.fillText(title, 800, y); ctx.restore();
 }
 
 function renderRace(t, dt) {
@@ -984,8 +1022,7 @@ function renderRace(t, dt) {
   else drawImg('ripple_spark', BUOY.x, BUOY.y + 18, 230);
   if (!done) r.twist.render(r, te, t);
   // fx
-  (r.fx || []).forEach(f => { const k = (rt - f.t0) / f.dur; if (k >= 0 && k < 1 && f.atlas) drawBurst(f, k); else if (k >= 0 && k < 1) drawImg(f.img, f.x, f.y, f.w * (.6 + .4 * k), { alpha: 1 - k, anchor: 'bottom', rot: f.rot || 0 }); });
-  if (r.fx) r.fx = r.fx.filter(f => rt - f.t0 < f.dur);
+  drawFx(r);
   // ducks sorted by depth
   const order = [...r.ducks].filter(d => !d.hidden).sort((a, b) => a.y - b.y);
   for (const d of order) {
@@ -1009,14 +1046,79 @@ function renderRace(t, dt) {
     drawImg('duck' + r.winner.sp + '_win', BUOY.x - 20, BUOY.y + 40, 230 * (.6 + .4 * ease(k)), { anchor: 'bottom' });
     drawTag(r.winner.name, BUOY.x - 120, BUOY.y - 100, true);
   }
-  // HUD
+  hud(r, t, dt);
+}
+function drawFx(r) {
+  const rt = r.now;
+  (r.fx || []).forEach(f => { const k = (rt - f.t0) / f.dur; if (k >= 0 && k < 1 && f.atlas) drawBurst(f, k); else if (k >= 0 && k < 1) drawImg(f.img, f.x, f.y, f.w * (.6 + .4 * k), { alpha: 1 - k, anchor: 'bottom', rot: f.rot || 0 }); });
+  if (r.fx) r.fx = r.fx.filter(f => rt - f.t0 < f.dur);
+}
+function hud(r, t, dt) {
   banner(r.banner, t);
-  if (!done) timerChip(Math.max(0, Math.ceil(r.T - rt)));
-  // confetti
+  if (r.phase !== 'done') timerChip(Math.max(0, Math.ceil(r.T - r.now)));
   r.confetti.forEach(c => { c.vy += 900 * dt; c.x += c.vx * dt; c.y += c.vy * dt; c.vx *= .99; c.r += c.vr * dt;
     ctx.save(); ctx.translate(c.x, c.y); ctx.rotate(c.r); ctx.fillStyle = c.c; ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h); ctx.restore(); });
   r.confetti = r.confetti.filter(c => c.y < H + 40);
 }
+
+/* ================= Games 2–6 (shared lifecycle; each game lives in games/*.js) ================= */
+const AV_GIRLS = [0, 2, 4, 6, 8], AV_BOYS = [1, 3, 5, 7, 9];   // Linh An Mai Vy Lan / Minh Nam Khoa Huy Bao
+function startGeneric(cls, T, winnerStu, racers) {
+  const g = curImpl();
+  if (!g.ready) return;
+  const girls = shuffle([...AV_GIRLS]), boys = shuffle([...AV_BOYS]), any = shuffle([...Array(10).keys()]);
+  const used = new Set();
+  const pickAv = gender => {
+    const pool = gender === 'f' ? girls : gender === 'm' ? boys : any;
+    let a = pool.find(x => !used.has(x)); if (a === undefined) a = any.find(x => !used.has(x)); used.add(a); return a;
+  };
+  const players = racers.map(s => ({ name: s.name, gender: cls.mode === 'numbers' ? null : s.gender, isWinner: s === winnerStu, seed: Math.random(), x: 0, y: 0 }));
+  players.forEach(p => { p.av = pickAv(p.gender); });
+  const winner = players.find(p => p.isWinner), decoys = shuffle(players.filter(p => !p.isWinner));
+  // a quarter of rounds have no twist: the winner is simply revealed after a near-miss
+  const r = race = { game: g, T, TW: T - 3.2, players, winner, decoys, decoy: decoys[0] || null, plain: !decoys.length || (window.FORCE_PLAIN ?? Math.random() < .25),
+    t0: performance.now(), now: 0, phase: 'run', banner: g.startBanner, confetti: [], cues: {}, lastTick: -1, fx: [] };
+  g.setup(r);
+  document.body.classList.add('running');
+  SFX.whistle(); SFX.cheer(); Music.play('race');
+  updateUI();
+}
+function renderGeneric(g, now, t, dt) {
+  if (!g.ready) {
+    ctx.fillStyle = '#1d3557'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.font = '700 44px "Baloo 2","Segoe UI",sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText('Đang tải ' + g.title + '…', 800, 460); ctx.textAlign = 'left'; return;
+  }
+  if (IMG.bg) ctx.drawImage(IMG.bg, 0, 0, W, H);
+  if (race) {
+    if (race.phase === 'run') tickRace(now); else race.now = (now - race.t0) / 1000;
+    g.render(race, t, dt); drawFx(race); hud(race, t, dt);
+  } else { g.idle(t); idleOverlay(g.title, t, g.titleY || 860); }
+}
+// a name tag centred on cx
+function tagC(text, cx, y, lead) {
+  ctx.save(); ctx.font = '700 25px "Baloo 2","Segoe UI",sans-serif'; const w = ctx.measureText(text).width + 22; ctx.restore();
+  drawTag(text, cx + w / 2, y, lead);
+}
+// draw a character pose of the current game, anchored at its feet; returns the drawn width
+function charImg(av, pose, x, y, h, opt = {}) {
+  const im = IMG['c' + av + '_' + pose] || IMG['c' + av + '_' + (opt.fallback || 'idle')]; if (!im) return 0;
+  const w = im.width * h / im.height;
+  ctx.save(); ctx.globalAlpha *= opt.alpha ?? 1; ctx.translate(x, y); if (opt.rot) ctx.rotate(opt.rot); if (opt.flip) ctx.scale(-1, 1);
+  ctx.drawImage(im, -w / 2, -h, w, h); ctx.restore(); return w;
+}
+const curGame = () => store.settings.game || 'g1';
+const curImpl = () => GAME_IMPL[curGame()] || null;
+function activateGame(id) {
+  if (race && race.phase === 'run') return;
+  store.settings.game = id; save();
+  race = null; hideResult();
+  const g = GAME_IMPL[id];
+  IMG = IMGSETS[id] = IMGSETS[id] || {};
+  STINGS = loadStings(id, g ? g.base : 'assets/duck-race/');
+  if (g && !g.loading) g.loading = loadImages(id, g.base, g.assets).then(() => { g.ready = true; updateUI(); });
+  updateUI();
+}
+
 function addTrail(x, y, rt) {
   const r = race; if (r.lastTrail && rt - r.lastTrail < .12) return; r.lastTrail = rt;
   r.fx = r.fx || []; r.fx.push({ img: ['wave1', 'wave2', 'wave3'][Math.floor(rt * 10) % 3], x: x - 40, y: y + 20, w: 140, t0: rt, dur: .6 });
@@ -1073,7 +1175,7 @@ function timerChip(n) {
 const resultEl = document.getElementById('result');
 function showResult(d) {
   document.getElementById('resName').textContent = d.name;
-  document.getElementById('resImg').src = 'assets/duck-race/duck' + d.sp + '_win.webp';
+  document.getElementById('resImg').src = race && race.game ? race.game.base + 'c' + d.av + '_' + (race.game.resultPose || 'win') + '.webp' : 'assets/duck-race/duck' + d.sp + '_win.webp';
   resultEl.classList.remove('hidden');
 }
 function hideResult() { resultEl.classList.add('hidden'); }
@@ -1083,11 +1185,16 @@ document.getElementById('sayBtn').onclick = () => race && speak(race.winner.name
 
 /* ================= Main UI ================= */
 const GAMES = [
-  { n: '01', name: 'Đua vịt cầu trượt', ready: true },
-  { n: '02', name: 'Sắp ra mắt' }, { n: '03', name: 'Sắp ra mắt' }, { n: '04', name: 'Sắp ra mắt' }, { n: '05', name: 'Sắp ra mắt' }, { n: '06', name: 'Sắp ra mắt' }
+  { id: 'g1', n: '01', name: 'Đua vịt cầu trượt', icon: '🦆' },
+  { id: 'g2', n: '02', name: 'Trứng khủng long siêu quậy', icon: '🥚' },
+  { id: 'g3', n: '03', name: 'Nồi phép thuật nổi loạn', icon: '🔮' },
+  { id: 'g4', n: '04', name: 'Rồng giữ kho báu', icon: '🐉' },
+  { id: 'g5', n: '05', name: 'Nhà máy robot lỗi nhẹ', icon: '🤖' },
+  { id: 'g6', n: '06', name: 'Thang máy khách sạn ma', icon: '👻' }
 ];
-document.getElementById('gameTabs').innerHTML = GAMES.map((g, i) =>
-  `<button class="tab ${i === 0 ? 'active' : ''} ${g.ready ? '' : 'soon'}" ${g.ready ? '' : 'disabled'}><b>GAME ${g.n}</b><span>${g.ready ? '🦆 ' : '🔒 '}${g.name}</span></button>`).join('');
+document.getElementById('gameTabs').innerHTML = GAMES.map(g =>
+  `<button class="tab" data-game="${g.id}"><b>GAME ${g.n}</b><span>${g.icon} ${g.name}</span></button>`).join('');
+document.querySelectorAll('#gameTabs .tab').forEach(b => b.onclick = () => { if (b.dataset.game !== curGame()) activateGame(b.dataset.game); });
 
 const durChips = document.getElementById('durChips');
 [10, 15, 20, 30].forEach(s => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = s + ' giây'; b.dataset.s = s; b.onclick = () => { store.settings.duration = s; save(); updateUI(); }; durChips.appendChild(b); });
@@ -1129,11 +1236,12 @@ function updateUI() {
   const cls = activeClass(), all = roster(cls), called = calledOf(cls), pool = eligible(cls);
   document.getElementById('classLabel').textContent = cls.name + ' · ' + all.length + ' bạn';
   [...durChips.children].forEach(b => b.classList.toggle('on', +b.dataset.s === store.settings.duration));
+  document.querySelectorAll('#gameTabs .tab').forEach(b => b.classList.toggle('active', b.dataset.game === curGame()));
   restChk.checked = store.settings.rest; voiceSel.value = store.settings.voice;
   soundBtn.textContent = store.settings.sound ? '🔊 Âm thanh' : '🔇 Âm thanh'; soundBtn.classList.toggle('off', !store.settings.sound);
   musicBtn.textContent = store.settings.music ? '🎵 Nhạc nền' : '🔕 Nhạc nền'; musicBtn.classList.toggle('off', !store.settings.music);
   const running = race && race.phase === 'run';
-  startBtn.disabled = running || !pool.length;
+  startBtn.disabled = running || !pool.length || !!(curImpl() && !curImpl().ready);
   startBtn.textContent = running ? '⏳ Đang chọn…' : '▶ Bắt đầu chọn!';
   const st = document.getElementById('status');
   if (!all.length) { st.textContent = 'Lớp chưa có học sinh — bấm nút vàng để thêm tên.'; st.className = 'status done'; }
@@ -1241,6 +1349,7 @@ document.addEventListener('keydown', e => {
 updateUI();
 const fontReady = document.fonts ? document.fonts.load('700 30px "Baloo 2"').catch(() => {}) : Promise.resolve();
 Promise.all([assetsReady, fontReady]).then(() => { buildBackground(); });
+activateGame(GAME_IMPL[curGame()] ? curGame() : 'g1');
 requestAnimationFrame(frame);
 </script>
 </body>
