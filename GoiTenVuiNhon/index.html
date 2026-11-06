@@ -143,6 +143,7 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
       <div class="lab">Thời gian chọn</div>
       <div class="row" id="durChips"></div>
       <label class="check"><input type="checkbox" id="restChk"> Bạn đã được gọi thì nghỉ</label>
+      <label class="check"><input type="checkbox" id="paintedChk"> Nền tranh vẽ chi tiết (game 2–6, tải thêm ~200 KB)</label>
       <label class="check"><input type="checkbox" id="calmChk"> Giảm chuyển động (không rung, không phóng to)</label>
       <div class="lab">Đọc tên</div>
       <div class="row">
@@ -230,7 +231,7 @@ textarea{font-family:inherit;font-size:17px;width:100%;min-height:260px;border:2
 <script>
 // Shared helpers for games 2-6 (each game registers itself in GAME_IMPL)
 window.GAME_IMPL = {};
-const COMMON_ASSETS = ['bg', 'name_plate', 'vfx_almost_selected', 'vfx_selected', 'vfx_wrong_turn', 'vfx_win'];
+const COMMON_ASSETS = ['name_plate', 'vfx_almost_selected', 'vfx_selected', 'vfx_wrong_turn', 'vfx_win'];
 const gAssets = (poses, extra) => [...COMMON_ASSETS, ...extra, ...[...Array(10).keys()].flatMap(i => poses.map(p => 'c' + i + '_' + p))];
 const spread = (n, total = 10) => [...Array(n)].map((_, k) => Math.floor(k * total / n));        // n slots spread over total
 // near-misses before the reveal: who gets teased and when
@@ -241,6 +242,7 @@ function makeFakes(r, from) {
 const activeFake = (r, t) => (r.fakes || []).find(f => t >= f.at && t < f.at + f.dur) || null;
 </script>
 <script src="games/fx.js"></script>
+<script src="games/bases.js"></script>
 <script src="games/scenes.js"></script>
 <script src="games/g2-eggs.js"></script>
 <script src="games/g3-cauldron.js"></script>
@@ -1123,7 +1125,11 @@ function renderGeneric(g, now, t, dt) {
     ctx.fillStyle = '#1d3557'; ctx.fillRect(0, 0, W, H); ctx.fillStyle = '#fff'; ctx.font = '700 44px "Baloo 2","Segoe UI",sans-serif';
     ctx.textAlign = 'center'; ctx.fillText('Đang tải ' + g.title + '…', 800, 460); ctx.textAlign = 'left'; return;
   }
-  if (IMG.bg) ctx.drawImage(IMG.bg, 0, 0, W, H);
+  // code-drawn base by default; the painted picture is optional and only downloaded when chosen
+  const painted = store.settings.paintedBg;
+  if (painted && !IMG.bg && !g.bgLoading) g.bgLoading = loadImages(g.id, g.base, ['bg']);
+  const base = painted && IMG.bg ? IMG.bg : BASES.get(g.id);
+  if (base) ctx.drawImage(base, 0, 0, W, H);
   FX.motes(t, g.mote);
   const sc = SCENES[g.id];
   if (sc) sc.back(t);
@@ -1250,6 +1256,8 @@ document.querySelectorAll('#gameTabs .tab').forEach(b => b.onclick = () => { if 
 
 const durChips = document.getElementById('durChips');
 [10, 15, 20, 30].forEach(s => { const b = document.createElement('button'); b.className = 'chip'; b.textContent = s + ' giây'; b.dataset.s = s; b.onclick = () => { store.settings.duration = s; save(); updateUI(); }; durChips.appendChild(b); });
+const paintedChk = document.getElementById('paintedChk');
+paintedChk.onchange = () => { store.settings.paintedBg = paintedChk.checked; save(); };
 const calmChk = document.getElementById('calmChk');
 calmChk.onchange = () => { store.settings.calm = calmChk.checked; save(); };
 const restChk = document.getElementById('restChk');
@@ -1291,7 +1299,7 @@ function updateUI() {
   document.getElementById('classLabel').textContent = cls.name + ' · ' + all.length + ' bạn';
   [...durChips.children].forEach(b => b.classList.toggle('on', +b.dataset.s === store.settings.duration));
   document.querySelectorAll('#gameTabs .tab').forEach(b => b.classList.toggle('active', b.dataset.game === curGame()));
-  restChk.checked = store.settings.rest; calmChk.checked = !!store.settings.calm; voiceSel.value = store.settings.voice;
+  restChk.checked = store.settings.rest; calmChk.checked = !!store.settings.calm; paintedChk.checked = !!store.settings.paintedBg; voiceSel.value = store.settings.voice;
   soundBtn.textContent = store.settings.sound ? '🔊 Âm thanh' : '🔇 Âm thanh'; soundBtn.classList.toggle('off', !store.settings.sound);
   musicBtn.textContent = store.settings.music ? '🎵 Nhạc nền' : '🔕 Nhạc nền'; musicBtn.classList.toggle('off', !store.settings.music);
   const running = race && race.phase === 'run';
