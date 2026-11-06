@@ -49,7 +49,7 @@
       if (!r.plain) {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D); SFX.swoosh(); r.banner = '✨ Quả cầu vàng phun lên bục công bố!'; });
         if (te > .9) cue('b', () => { outcome('wrong_turn', D); FX.bubbles(POD.x, TOP - 60, 26, '#d8f7ff'); SFX.bubbles(); SFX.sadTrombone(); r.banner = '🫧 Ơ! Quả cầu vàng hóa bong bóng xà phòng!'; });
-        if (te > 1.3) cue('c', () => { SFX.boing(); r.banner = '🐸 Chú ếch giành lấy đũa phép…'; });
+        if (te > 1.3) cue('c', () => { CAM.shake(r, 5); SFX.boing(); r.banner = '🐸 Chú ếch giành lấy đũa phép…'; });
         if (te > 1.7) cue('d', () => { FX.line(520, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🪄 …và chỉ đúng quả cầu thật!'; });
       } else {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🔮 Quả cầu của ' + (D || Wn).name + ' bay lên…'; });

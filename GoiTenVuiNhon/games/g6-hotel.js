@@ -52,7 +52,7 @@
       if (f && te < 0) cue('fk' + f.at, () => { r.banner = '👣 Dấu chân dẫn tới phòng của ' + f.p.name + '?'; SFX.leader(); });
       if (!r.plain) {
         if (te > 0) cue('a', () => { Music.play('tension'); r.banner = '👣 Dấu chân dừng ở phòng của ' + D.name + '!'; });
-        if (te > .6) cue('b', () => { FX.ring(D.door[0], D.door[1] - 60, '#b48cff', 140); FX.smoke(D.door[0], D.door[1] - 50, 10, '#bfefff'); outcome('almost_selected', D); SFX.tone(140, .7, { type: 'sine', vol: .2, vib: 12, vibRate: 5 }); r.banner = '👻 Bùuu! Một con ma cầm biểu tượng giả!'; });
+        if (te > .6) cue('b', () => { FX.ring(D.door[0], D.door[1] - 60, '#b48cff', 140); FX.smoke(D.door[0], D.door[1] - 50, 10, '#bfefff'); outcome('almost_selected', D); SFX.tone(140, .7, { type: 'sine', vol: .2, vib: 12, vibRate: 5 }); r.banner = '👻 Bùuu! Một con ma cầm biểu tượng giả!'; CAM.shake(r, 9); });
         if (te > 1) cue('c', () => { outcome('wrong_turn', D); SFX.sadTrombone(); });
         if (te > 1.2) cue('d', () => { FX.sparkle(SIGN[0], SIGN[1] - 70, 18, ['#ffd84a', '#ffffff']); FX.smoke(SIGN[0] + 60, SIGN[1] + 120, 6, '#d8d0e8'); SFX.swoosh(); r.banner = '💀 Bác bộ xương xoay bảng chỉ dẫn!'; });
         if (te > 1.6) cue('e', () => { outcome('selected', Wn); r.banner = '👣 Dấu chân đổi hướng…'; });

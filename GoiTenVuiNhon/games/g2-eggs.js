@@ -34,7 +34,7 @@
       if (!r.plain) {
         if (te > 0) cue('d0', () => { Music.play('tension'); outcome('almost_selected', D); r.banner = '🥚 Trứng của ' + D.name + ' sắp nở!'; });
         if (te > .7) cue('d1', () => { outcome('wrong_turn', D); SFX.pop(); SFX.quack(0, 2.4); SFX.quack(.18, 2.6); SFX.sadTrombone(); addFx('dust_puffs', D.hx, D.hy, 200, .7); FX.shards(D.hx, D.hy - 70, 20); r.banner = '🐔 Ơ kìa! Chỉ là con gà cao su!'; });
-        if (te > 1.1) cue('d2', () => { SFX.boing(); r.banner = '🦖 Khủng long mẹ lấy đuôi lăn một quả trứng khác…'; });
+        if (te > 1.1) cue('d2', () => { CAM.shake(r, 7); SFX.boing(); r.banner = '🦖 Khủng long mẹ lấy đuôi lăn một quả trứng khác…'; });
         if (te > 1.6) cue('d3', () => { outcome('selected', Wn); SFX.wheee(); });
       } else {
         if (te > 0) cue('p0', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🥚 Trứng của ' + (D || Wn).name + ' rung dữ dội…'; });

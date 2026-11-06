@@ -37,10 +37,10 @@
       }
       const D = r.decoy, Wn = r.winner, S = r.plain ? Wn : D;
       if (te > 0) cue('a', () => { Music.play('tension'); r.banner = '🔍 Máy quét dừng lại ở ' + S.name + '…'; });
-      if (te > .4) cue('b', () => { FX.metal(X0 + 4 * STEP, BELT_Y - KID_H - 10, 22); FX.ring(X0 + 4 * STEP, BELT_Y - KID_H * .55, '#ffd84a', 120); SFX.heartbeat(); outcome(r.plain ? 'selected' : 'almost_selected', S); r.banner = '✅ Máy đóng dấu: ' + S.name + '!'; });
+      if (te > .4) cue('b', () => { CAM.shake(r, 8); FX.metal(X0 + 4 * STEP, BELT_Y - KID_H - 10, 22); FX.ring(X0 + 4 * STEP, BELT_Y - KID_H * .55, '#ffd84a', 120); SFX.heartbeat(); outcome(r.plain ? 'selected' : 'almost_selected', S); r.banner = '✅ Máy đóng dấu: ' + S.name + '!'; });
       if (!r.plain) {
         if (te > .9) cue('c', () => { outcome('wrong_turn', D); [0, .25, .5, .75].forEach(d => SFX.tone(d % .5 ? 660 : 880, .22, { type: 'square', vol: .07, delay: d })); SFX.noise(.4, { vol: .2, f: 3000 }); r.banner = '🚨 LỖI! Máy đóng dấu nhầm rồi!'; });
-        if (te > 1.3) cue('d', () => { FX.metal(X0, BELT_Y + 10, 14); FX.metal(X0 + 9 * STEP, BELT_Y + 10, 14); SFX.swoosh(); r.banner = '⏪ Băng chuyền chạy ngược!'; });
+        if (te > 1.3) cue('d', () => { FX.metal(X0, BELT_Y + 10, 14); FX.metal(X0 + 9 * STEP, BELT_Y + 10, 14); SFX.swoosh(); r.banner = '⏪ Băng chuyền chạy ngược!'; CAM.shake(r, 6); });
         if (te > 1.6) cue('e', () => { outcome('selected', Wn); SFX.wheee(); r.banner = '🔋 Robot cuối hàng tiến tới bục sạc!'; });
       } else if (te > 1.1) cue('e', () => { SFX.wheee(); r.banner = '🔋 ' + Wn.name + ' tiến tới bục sạc!'; });
     },

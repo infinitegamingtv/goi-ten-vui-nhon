@@ -145,3 +145,41 @@ const FX = (() => {
     }
   };
 })();
+
+// Camera for the play area: smooth zoom/follow, screen shake and short slow motion.
+// The banner, timer and confetti are drawn after CAM.end(), so they never move.
+const CAM = (() => {
+  const SW = 1600, SH = 900;
+  const cam = r => r.cam || (r.cam = { x: SW / 2, y: SH / 2, z: 1, tx: SW / 2, ty: SH / 2, tz: 1, shake: 0, follow: null });
+  return {
+    // call once per frame, right after the base canvas transform is set
+    begin(r, dt) {
+      if (!r) return;
+      const c = cam(r);
+      if (r.slowUntil && performance.now() < r.slowUntil) r.t0 += dt * 1000 * (1 - r.slowF);   // stretch round time
+      if (c.follow) { c.tx = c.follow.x; c.ty = c.follow.y - 40; }
+      else if (r.phase === 'run' && r.now > r.TW - 2.5) {        // gentle push-in during the final countdown
+        const k = clamp((r.now - r.TW + 2.5) / 2.5); c.tx = SW / 2; c.ty = SH / 2 + 20; c.tz = 1 + .05 * k;
+      }
+      const e = 1 - Math.exp(-dt * 4.5);
+      c.x += (c.tx - c.x) * e; c.y += (c.ty - c.y) * e; c.z += (c.tz - c.z) * e;
+      c.shake *= Math.exp(-dt * 7);
+      const hw = SW / 2 / c.z, hh = SH / 2 / c.z, cx = clamp(c.x, hw, SW - hw), cy = clamp(c.y, hh, SH - hh);
+      const ox = (Math.random() * 2 - 1) * c.shake, oy = (Math.random() * 2 - 1) * c.shake;
+      ctx.fillStyle = '#10223a'; ctx.fillRect(0, 0, SW, SH);
+      ctx.translate(SW / 2 + ox, SH / 2 + oy); ctx.scale(c.z, c.z); ctx.translate(-cx, -cy);
+    },
+    end() { ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0); },
+    // smoothly zoom towards something with x/y (it keeps following it as it moves)
+    follow(r, obj, z = 1.25) { const c = cam(r); c.follow = obj; c.tz = z; },
+    release(r) { const c = cam(r); c.follow = null; c.tx = SW / 2; c.ty = SH / 2; c.tz = 1; },
+    shake(r, px = 10) { const c = cam(r); c.shake = Math.max(c.shake, px); },
+    slow(r, seconds = .5, factor = .35) { r.slowUntil = performance.now() + seconds * 1000; r.slowF = factor; },
+    // standard reactions for the shared outcome moments
+    react(r, kind, who) {
+      if (kind === 'almost_selected') this.follow(r, who, 1.12);
+      else if (kind === 'wrong_turn') { this.shake(r, 11); this.release(r); }
+      else if (kind === 'selected') { this.follow(r, who, 1.22); this.slow(r, .45, .35); this.shake(r, 5); }
+    }
+  };
+})();
