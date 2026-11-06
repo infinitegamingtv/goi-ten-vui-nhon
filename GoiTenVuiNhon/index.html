@@ -241,6 +241,7 @@ function makeFakes(r, from) {
 const activeFake = (r, t) => (r.fakes || []).find(f => t >= f.at && t < f.at + f.dur) || null;
 </script>
 <script src="games/fx.js"></script>
+<script src="games/scenes.js"></script>
 <script src="games/g2-eggs.js"></script>
 <script src="games/g3-cauldron.js"></script>
 <script src="games/g4-dragon.js"></script>
@@ -1124,11 +1125,13 @@ function renderGeneric(g, now, t, dt) {
   }
   if (IMG.bg) ctx.drawImage(IMG.bg, 0, 0, W, H);
   FX.motes(t, g.mote);
+  const sc = SCENES[g.id];
+  if (sc) sc.back(t);
   if (race && race.phase === 'done' && race.winRays) FX.rays(race.winRays.x, race.winRays.y + 30, 340, t, g.rayColor);
   if (race) {
     if (race.phase === 'run') tickRace(now); else race.now = (now - race.t0) / 1000;
-    g.render(race, t, dt); drawFx(race); hud(race, t, dt);
-  } else { g.idle(t); idleOverlay(g.title, t, g.titleY || 860); }
+    g.render(race, t, dt); drawFx(race); if (sc) sc.front(t); hud(race, t, dt);
+  } else { g.idle(t); if (sc) sc.front(t); idleOverlay(g.title, t, g.titleY || 860); }
 }
 // a name tag centred on cx
 function tagC(text, cx, y, lead) {
