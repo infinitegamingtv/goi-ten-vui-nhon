@@ -1,23 +1,25 @@
-# Gọi Tên Vui Nhộn
+# Name Picker Party
 
-Trò chơi gọi tên học sinh ngẫu nhiên cho lớp học, chiếu lên màn hình cho cả lớp xem.
+A random student picker for the classroom, made to be shown on a projector. Six mini-games, each with its own reveal and twist.
 
-## Chơi thế nào
+## How to play
 
-Mở `GoiTenVuiNhon/index.html` bằng Chrome hoặc Edge (giữ thư mục `assets` nằm cạnh file).
+Open `GoiTenVuiNhon/index.html` in Chrome or Edge, or use the GitHub Pages link. Add your class with the yellow class button, pick a game at the top, then press **▶ Pick a name!** or Space.
 
-- **Game 01 – Đua vịt cầu trượt:** mười chú vịt trượt xuống máng nước rồi bơi qua dòng suối. Chú vịt chạm phao vàng được chọn. Phút cuối, chú vịt tưởng thắng mải lặn theo chiếc nút lấp lánh, một xoáy nước đẩy chú vịt thắng thật tới phao vàng.
-- **Game 02 – Trứng khủng long siêu quậy:** trứng rung, nhảy, nứt dần; quả trứng nở cuối cùng được gọi. Lật kèo: quả trứng đầu tiên chỉ có gà cao su, khủng long mẹ lăn quả trứng thật vào tổ chiến thắng.
-- **Game 03 – Nồi phép thuật nổi loạn:** các quả cầu phép mang gương mặt học sinh xoay quanh nồi. Lật kèo: quả cầu vàng hóa bong bóng xà phòng, chú ếch giành đũa phép chỉ đúng người.
-- **Game 04 – Rồng giữ kho báu:** rương kho báu nhảy, đổi chỗ, rồng đánh hơi rồi mở rương. Lật kèo: rương đầu chỉ có vịt cao su, rồng hắt hơi làm rương thật trượt ra.
-- **Game 05 – Nhà máy robot lỗi nhẹ:** robot chạy trên băng chuyền qua máy quét. Lật kèo: máy đóng dấu nhầm, băng chuyền chạy ngược đưa robot cuối hàng lên bục sạc.
-- **Game 06 – Thang máy khách sạn ma:** cửa thang máy mở cho xem biểu tượng phòng rồi đóng lại, dấu chân ma dẫn đường. Lật kèo: con ma cầm biểu tượng giả, bộ xương lao công xoay bảng chỉ dẫn.
+| Game | How it works | Twist |
+|---|---|---|
+| 01 Duck Slide Race | Ten ducks slide down a chute and race to the golden buoy. | Shiny button and whirlpool, a big wave, a waterspout, or the red buoy mix-up. |
+| 02 Mischievous Dino Eggs | Eggs wobble, hop and crack; the last to hatch is picked. | The first egg holds a rubber chicken; mama dino rolls the real egg into the winning nest. |
+| 03 Rebellious Cauldron | Magic orbs with students' faces circle the cauldron. | The golden orb turns into soap bubbles; the frog grabs the wand and points at the real winner. |
+| 04 Dragon Treasure Guard | Treasure chests hop and swap places; the dragon sniffs and opens one. | The first chest has a rubber duck; the dragon sneezes and the real chest slides out. |
+| 05 Faulty Robot Factory | Robots ride a conveyor under a scanner. | The stamp hits the wrong robot; the belt reverses and carries the last robot to the charger. |
+| 06 Haunted Hotel Lift | Lift doors flash room symbols, then ghostly footprints lead the way. | A ghost holds a fake symbol; the skeleton janitor spins the signpost. |
 
-Khoảng 1/4 số lượt không có lật kèo: người thắng lộ ra sau một lần suýt chọn nhầm.
+About one round in four has no twist: the winner is revealed after a near-miss. The winner is always chosen the moment you press Pick.
 
-Người được gọi được chọn ngẫu nhiên ngay lúc bấm Bắt đầu; các lần chọn hụt chỉ để tạo kịch tính. Danh sách lớp được lưu trong trình duyệt.
+Class lists stay in the browser; use **Export backup** on the class page to keep a copy.
 
-## Thư mục
+## Folders
 
-- `GoiTenVuiNhon/` – game: `index.html` (khung chung + game 01), `games/` (game 02–06), `assets/` (sprite, nền, hiệu ứng, âm thanh).
-- `vIOTJ/` – ảnh sprite gốc.
+- `GoiTenVuiNhon/` – the game: `index.html` (shell and game 01), `games/` (games 02–06, effects, scenes), `assets/` (sprites, bursts, sounds).
+- `vIOTJ/` – original sprite sheets.

@@ -9,9 +9,9 @@
   const pose = (av, p) => (BROKEN[av] || []).includes(p) ? 'idle' : p;
 
   GAME_IMPL.g5 = {
-    id: 'g5', title: 'Nhà máy robot lỗi nhẹ', base: 'assets/g5/', titleY: 470,
+    id: 'g5', title: 'Faulty Robot Factory', base: 'assets/g5/', titleY: 470,
     assets: gAssets(['idle', 'action', 'almost', 'fake', 'twist', 'win'], ['p0', 'p1', 'p2', 'p3', 'p11', 'p23', 'p28', 'p30', 'p31', 'p18', 'p24']),
-    startBanner: '🤖 Băng chuyền khởi động!', mote: '#9ff3ff', rayColor: '#a8fff0',
+    startBanner: '🤖 The conveyor belt starts up!', mote: '#9ff3ff', rayColor: '#a8fff0',
 
     setup(r) {
       const m = Math.max(3, Math.round((r.TW - .8) * 1.1));      // slots travelled before the reveal
@@ -32,17 +32,17 @@
     tick(r, t, te) {
       if (te < 0) {
         const near = r.players.find(p => Math.abs(X0 + this.idx(r, p, t) * STEP - SCAN_X) < 40);
-        if (near && near !== r.scanning && t > 1) { r.scanning = near; r.banner = '🔍 Đang quét: ' + near.name; SFX.tone(1200, .15, { type: 'square', vol: .04, to: 1600 }); }
+        if (near && near !== r.scanning && t > 1) { r.scanning = near; r.banner = '🔍 Scanning: ' + near.name; SFX.tone(1200, .15, { type: 'square', vol: .04, to: 1600 }); }
         if (Math.random() < .03) SFX.tone(90, .08, { type: 'square', vol: .04 });    // belt clank
       }
       const D = r.decoy, Wn = r.winner, S = r.plain ? Wn : D;
-      if (te > 0) cue('a', () => { Music.play('tension'); r.banner = '🔍 Máy quét dừng lại ở ' + S.name + '…'; });
-      if (te > .4) cue('b', () => { CAM.shake(r, 8); FX.metal(X0 + 4 * STEP, BELT_Y - KID_H - 10, 22); FX.ring(X0 + 4 * STEP, BELT_Y - KID_H * .55, '#ffd84a', 120); SFX.heartbeat(); outcome(r.plain ? 'selected' : 'almost_selected', S); r.banner = '✅ Máy đóng dấu: ' + S.name + '!'; });
+      if (te > 0) cue('a', () => { Music.play('tension'); r.banner = '🔍 The scanner stops at ' + S.name + '…'; });
+      if (te > .4) cue('b', () => { CAM.shake(r, 8); FX.metal(X0 + 4 * STEP, BELT_Y - KID_H - 10, 22); FX.ring(X0 + 4 * STEP, BELT_Y - KID_H * .55, '#ffd84a', 120); SFX.heartbeat(); outcome(r.plain ? 'selected' : 'almost_selected', S); r.banner = '✅ Stamped: ' + S.name + '!'; });
       if (!r.plain) {
-        if (te > .9) cue('c', () => { outcome('wrong_turn', D); [0, .25, .5, .75].forEach(d => SFX.tone(d % .5 ? 660 : 880, .22, { type: 'square', vol: .07, delay: d })); SFX.noise(.4, { vol: .2, f: 3000 }); r.banner = '🚨 LỖI! Máy đóng dấu nhầm rồi!'; });
-        if (te > 1.3) cue('d', () => { FX.metal(X0, BELT_Y + 10, 14); FX.metal(X0 + 9 * STEP, BELT_Y + 10, 14); SFX.swoosh(); r.banner = '⏪ Băng chuyền chạy ngược!'; CAM.shake(r, 6); });
-        if (te > 1.6) cue('e', () => { outcome('selected', Wn); SFX.wheee(); r.banner = '🔋 Robot cuối hàng tiến tới bục sạc!'; });
-      } else if (te > 1.1) cue('e', () => { SFX.wheee(); r.banner = '🔋 ' + Wn.name + ' tiến tới bục sạc!'; });
+        if (te > .9) cue('c', () => { outcome('wrong_turn', D); [0, .25, .5, .75].forEach(d => SFX.tone(d % .5 ? 660 : 880, .22, { type: 'square', vol: .07, delay: d })); SFX.noise(.4, { vol: .2, f: 3000 }); r.banner = '🚨 ERROR! Wrong robot stamped!'; });
+        if (te > 1.3) cue('d', () => { FX.metal(X0, BELT_Y + 10, 14); FX.metal(X0 + 9 * STEP, BELT_Y + 10, 14); SFX.swoosh(); r.banner = '⏪ The belt runs backwards!'; CAM.shake(r, 6); });
+        if (te > 1.6) cue('e', () => { outcome('selected', Wn); SFX.wheee(); r.banner = '🔋 The last robot rolls onto the charger!'; });
+      } else if (te > 1.1) cue('e', () => { SFX.wheee(); r.banner = '🔋 ' + Wn.name + ' heads for the charger!'; });
     },
 
     // the winner's trip from the end of the belt up the ramp to the charging pad
@@ -110,7 +110,7 @@
       }
     },
     onFinish() { FX.bolts(PAD[0], PAD[1] - 80, 8, 150); FX.ring(PAD[0], PAD[1], '#7cf7ff', 220); FX.metal(PAD[0], PAD[1] - 40, 30); },
-    winBanner: r => '🔋 ' + r.winner.name + ' sạc đầy năng lượng!',
+    winBanner: r => '🔋 ' + r.winner.name + ' is fully charged!',
     winPos: () => ({ x: PAD[0], y: PAD[1] - 120 })
   };
 })();

@@ -27,11 +27,11 @@
   const arc = (a, b, k, lift) => [lerp(a[0], b[0], k), lerp(a[1], b[1], k) - Math.sin(k * Math.PI) * lift];
 
   GAME_IMPL.g3 = {
-    id: 'g3', title: 'Nồi phép thuật nổi loạn', base: 'assets/g3/', titleY: 400,
+    id: 'g3', title: 'Rebellious Cauldron', base: 'assets/g3/', titleY: 400,
     assets: gAssets(['idle', 'twist', 'win'],
       [...ORBS, 'golden_sphere', 'golden_orb_to_bubbles', 'bubble_cluster', 'cauldron', 'stone_pedestal', 'smoke_green', 'smoke_purple', 'smoke_pink',
         'frog_ready', 'frog_jump', 'frog_staff', 'frog_point_true', 'frog_shocked', 'frog_bow', 'vfx_burst_orb', 'vfx_burst_flower', 'vfx_gold_trail', 'star_cluster']),
-    startBanner: '🔮 Các quả cầu phép bắt đầu xoay quanh nồi!', mote: '#d6b8ff', rayColor: '#e6ccff',
+    startBanner: '🔮 The magic orbs start circling the cauldron!', mote: '#d6b8ff', rayColor: '#e6ccff',
 
     setup(r) {
       r.players.forEach((p, i) => { p.i = i; p.a0 = i / r.players.length * Math.PI * 2; });
@@ -44,17 +44,17 @@
 
     tick(r, t, te) {
       const f = activeFake(r, t), D = r.decoy, Wn = r.winner;
-      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🔮 Quả cầu của ' + f.p.name + ' bay vọt lên!'; SFX.leader(); });
+      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🔮 ' + f.p.name + "'s orb shoots up!"; SFX.leader(); });
       if (te < 0 && Math.random() < .02) SFX.tone(300 + Math.random() * 300, .12, { vol: .05, to: 700 });   // bubbling
       if (!r.plain) {
-        if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D); SFX.swoosh(); r.banner = '✨ Quả cầu vàng phun lên bục công bố!'; });
-        if (te > .9) cue('b', () => { outcome('wrong_turn', D); FX.bubbles(POD.x, TOP - 60, 26, '#d8f7ff'); SFX.bubbles(); SFX.sadTrombone(); r.banner = '🫧 Ơ! Quả cầu vàng hóa bong bóng xà phòng!'; });
-        if (te > 1.3) cue('c', () => { CAM.shake(r, 5); SFX.boing(); r.banner = '🐸 Chú ếch giành lấy đũa phép…'; });
-        if (te > 1.7) cue('d', () => { FX.line(520, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🪄 …và chỉ đúng quả cầu thật!'; });
+        if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D); SFX.swoosh(); r.banner = '✨ A golden orb blasts onto the podium!'; });
+        if (te > .9) cue('b', () => { outcome('wrong_turn', D); FX.bubbles(POD.x, TOP - 60, 26, '#d8f7ff'); SFX.bubbles(); SFX.sadTrombone(); r.banner = '🫧 Oh! The golden orb turns into soap bubbles!'; });
+        if (te > 1.3) cue('c', () => { CAM.shake(r, 5); SFX.boing(); r.banner = '🐸 The frog grabs the magic wand…'; });
+        if (te > 1.7) cue('d', () => { FX.line(520, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🪄 …and points at the real orb!'; });
       } else {
-        if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🔮 Quả cầu của ' + (D || Wn).name + ' bay lên…'; });
-        if (te > .9) cue('b', () => { SFX.boing(); r.banner = '😮 …rồi lại rơi xuống!'; });
-        if (te > 1) cue('c', () => { FX.line(FROG.x + 60, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🐸 Chú ếch chỉ đũa phép vào quả cầu này!'; });
+        if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🔮 ' + (D || Wn).name + "'s orb rises…"; });
+        if (te > .9) cue('b', () => { SFX.boing(); r.banner = '😮 …and drops back down!'; });
+        if (te > 1) cue('c', () => { FX.line(FROG.x + 60, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🐸 The frog points the wand at this orb!'; });
       }
       const fly = r.plain ? 1.3 : 1.9, pop = r.plain ? 2.6 : 2.8;
       if (te > fly) cue('fly', () => { SFX.wheee(); });
@@ -136,7 +136,7 @@
       }
       drawImg('frog_ready', FROG.x, FROG.y, 190, { anchor: 'bottom' });
     },
-    winBanner: r => '🏆 ' + r.winner.name + ' bước lên bục công bố!',
+    winBanner: r => '🏆 ' + r.winner.name + ' takes the podium!',
     winPos: () => ({ x: POD.x, y: TOP - 120 })
   };
 })();

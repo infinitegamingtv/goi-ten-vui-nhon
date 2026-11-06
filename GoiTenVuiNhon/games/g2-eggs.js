@@ -13,10 +13,10 @@
   }
 
   GAME_IMPL.g2 = {
-    id: 'g2', title: 'Trứng khủng long siêu quậy', base: 'assets/g2/', titleY: 470,
+    id: 'g2', title: 'Mischievous Dino Eggs', base: 'assets/g2/', titleY: 470,
     assets: gAssets(['egg', 'egg_ready', 'egg_crack', 'egg_almost', 'twist', 'win', 'chicken'],
       ['dino_idle', 'dino_thinking', 'dino_pointing', 'dino_shocked', 'dino_celebrate', 'dino_tail_roll_egg', 'winner_nest', 'cracked_eggshells', 'rubber_chicken', 'dust_puffs', 'hatch_sparkles']),
-    startBanner: '🥚 Các quả trứng bắt đầu rung rinh!', mote: '#fff1b8', rayColor: '#fff2a8',
+    startBanner: '🥚 The eggs start to wobble!', mote: '#fff1b8', rayColor: '#fff2a8',
 
     setup(r) {
       const slots = spread(r.players.length);
@@ -28,17 +28,17 @@
 
     tick(r, t, te) {
       const f = activeFake(r, t);
-      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🥚 Trứng của ' + f.p.name + ' rung mạnh quá!'; SFX.leader(); addFx('dust_puffs', f.p.hx, f.p.hy + 6, 170, .8); FX.smoke(f.p.hx, f.p.hy, 6, '#e8d3a8'); });
+      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🥚 ' + f.p.name + "'s egg is shaking hard!"; SFX.leader(); addFx('dust_puffs', f.p.hx, f.p.hy + 6, 170, .8); FX.smoke(f.p.hx, f.p.hy, 6, '#e8d3a8'); });
       if (te < -.2 && Math.random() < .03) SFX.tone(160 + Math.random() * 80, .08, { type: 'triangle', vol: .05 });   // little knocks
       const D = r.decoy, Wn = r.winner;
       if (!r.plain) {
-        if (te > 0) cue('d0', () => { Music.play('tension'); outcome('almost_selected', D); r.banner = '🥚 Trứng của ' + D.name + ' sắp nở!'; });
-        if (te > .7) cue('d1', () => { outcome('wrong_turn', D); SFX.pop(); SFX.quack(0, 2.4); SFX.quack(.18, 2.6); SFX.sadTrombone(); addFx('dust_puffs', D.hx, D.hy, 200, .7); FX.shards(D.hx, D.hy - 70, 20); r.banner = '🐔 Ơ kìa! Chỉ là con gà cao su!'; });
-        if (te > 1.1) cue('d2', () => { CAM.shake(r, 7); SFX.boing(); r.banner = '🦖 Khủng long mẹ lấy đuôi lăn một quả trứng khác…'; });
+        if (te > 0) cue('d0', () => { Music.play('tension'); outcome('almost_selected', D); r.banner = '🥚 ' + D.name + "'s egg is about to hatch!"; });
+        if (te > .7) cue('d1', () => { outcome('wrong_turn', D); SFX.pop(); SFX.quack(0, 2.4); SFX.quack(.18, 2.6); SFX.sadTrombone(); addFx('dust_puffs', D.hx, D.hy, 200, .7); FX.shards(D.hx, D.hy - 70, 20); r.banner = '🐔 Huh?! It is just a rubber chicken!'; });
+        if (te > 1.1) cue('d2', () => { CAM.shake(r, 7); SFX.boing(); r.banner = '🦖 Mama dino rolls another egg with her tail…'; });
         if (te > 1.6) cue('d3', () => { outcome('selected', Wn); SFX.wheee(); });
       } else {
-        if (te > 0) cue('p0', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🥚 Trứng của ' + (D || Wn).name + ' rung dữ dội…'; });
-        if (te > 1) cue('p1', () => { outcome('selected', Wn); SFX.boing(); r.banner = '🦖 Khủng long mẹ chọn quả trứng này!'; });
+        if (te > 0) cue('p0', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🥚 ' + (D || Wn).name + "'s egg rattles wildly…"; });
+        if (te > 1) cue('p1', () => { outcome('selected', Wn); SFX.boing(); r.banner = '🦖 Mama dino picks this egg!'; });
       }
       if (te > 2.6) cue('crk', () => { FX.shards(WIN_NEST[0], WIN_NEST[1] - 80, 8); FX.glitter(WIN_NEST[0], WIN_NEST[1] - 80, 8); SFX.sparkle(); SFX.tone(900, .1, { type: 'square', vol: .06 }); });
     },
@@ -113,7 +113,7 @@
       drawImg('dino_idle', 95, 900, 220, { anchor: 'bottom' });
     },
     onFinish() { FX.shards(WIN_NEST[0], WIN_NEST[1] - 90, 34); FX.smoke(WIN_NEST[0], WIN_NEST[1], 8, '#fff6dc'); },
-    winBanner: r => '🐣 ' + r.winner.name + ' nở ra rồi!',
+    winBanner: r => '🐣 ' + r.winner.name + ' has hatched!',
     winPos: () => ({ x: WIN_NEST[0], y: WIN_NEST[1] - 100 })
   };
 })();
