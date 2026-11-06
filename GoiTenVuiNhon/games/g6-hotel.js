@@ -35,7 +35,7 @@
   GAME_IMPL.g6 = {
     id: 'g6', title: 'Thang máy khách sạn ma', base: 'assets/g6/', titleY: 650,
     assets: gAssets(['observe', 'follow', 'win'], [...ICONS, 'p0', 'p2', 'p4', 'p17', 'p23', 'p26', 'p27']),
-    startBanner: '🛎️ Nhớ biểu tượng của từng phòng nhé!',
+    startBanner: '🛎️ Nhớ biểu tượng của từng phòng nhé!', mote: '#9ff7ff', rayColor: '#fff0b0',
 
     setup(r) {
       const slots = spread(r.players.length), icons = shuffle([...ICONS]);
@@ -47,21 +47,21 @@
 
     tick(r, t, te) {
       const [a, b] = mem(r), f = activeFake(r, t), D = r.decoy, Wn = r.winner;
-      if (t > a) cue('open', () => { SFX.ding(); });
+      if (t > a) cue('open', () => { SFX.ding(); r.players.forEach(p => FX.glitter(p.door[0], p.door[1] - 60, 3)); });
       if (t > b) cue('close', () => { SFX.tone(220, .3, { type: 'triangle', vol: .1 }); r.banner = '👣 Theo dấu chân ma…'; });
       if (f && te < 0) cue('fk' + f.at, () => { r.banner = '👣 Dấu chân dẫn tới phòng của ' + f.p.name + '?'; SFX.leader(); });
       if (!r.plain) {
         if (te > 0) cue('a', () => { Music.play('tension'); r.banner = '👣 Dấu chân dừng ở phòng của ' + D.name + '!'; });
-        if (te > .6) cue('b', () => { outcome('almost_selected', D); SFX.tone(140, .7, { type: 'sine', vol: .2, vib: 12, vibRate: 5 }); r.banner = '👻 Bùuu! Một con ma cầm biểu tượng giả!'; });
+        if (te > .6) cue('b', () => { FX.ring(D.door[0], D.door[1] - 60, '#b48cff', 140); FX.smoke(D.door[0], D.door[1] - 50, 10, '#bfefff'); outcome('almost_selected', D); SFX.tone(140, .7, { type: 'sine', vol: .2, vib: 12, vibRate: 5 }); r.banner = '👻 Bùuu! Một con ma cầm biểu tượng giả!'; });
         if (te > 1) cue('c', () => { outcome('wrong_turn', D); SFX.sadTrombone(); });
-        if (te > 1.2) cue('d', () => { SFX.swoosh(); r.banner = '💀 Bác bộ xương xoay bảng chỉ dẫn!'; });
+        if (te > 1.2) cue('d', () => { FX.sparkle(SIGN[0], SIGN[1] - 70, 18, ['#ffd84a', '#ffffff']); FX.smoke(SIGN[0] + 60, SIGN[1] + 120, 6, '#d8d0e8'); SFX.swoosh(); r.banner = '💀 Bác bộ xương xoay bảng chỉ dẫn!'; });
         if (te > 1.6) cue('e', () => { outcome('selected', Wn); r.banner = '👣 Dấu chân đổi hướng…'; });
       } else {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '👣 Có phải phòng của ' + (D || Wn).name + '?'; });
         if (te > .8) cue('b', () => { SFX.boing(); r.banner = '🙅 …không phải! Dấu chân đi tiếp…'; });
         if (te > 1.6) cue('e', () => { outcome('selected', Wn); });
       }
-      if (te > (r.plain ? 2 : 2.4)) cue('door', () => { SFX.ding(); SFX.sparkle(); r.banner = '🚪 Cửa phòng ' + Wn.name + ' mở ra!'; });
+      if (te > (r.plain ? 2 : 2.4)) cue('door', () => { FX.sparkle(Wn.door[0], Wn.door[1] - 60, 24); FX.ring(Wn.door[0], Wn.door[1] - 60, '#fff0b0', 130); SFX.ding(); SFX.sparkle(); r.banner = '🚪 Cửa phòng ' + Wn.name + ' mở ra!'; });
     },
 
     render(r, t) {
@@ -94,6 +94,7 @@
       if (te > openW + .3 && !done) {
         const k = ease(clamp((te - openW - .3) / (3.2 - openW - .3))), d = Wn.door, x = lerp(d[0], PED[0], k), y = lerp(d[1], PED[1], k);
         drawImg('p26', d[0], d[1] + 10, 140, { anchor: 'bottom', alpha: .7 * (1 - k) });
+        FX.every(r, 'walk', .1, () => FX.glitter(x, y - 10, 1, ['#7ff6ff']));
         charImg(Wn.av, 'follow', x, y, lerp(100, 200, k)); Wn.x = x; Wn.y = y - 60;
       }
       if (done) {
@@ -108,6 +109,7 @@
       DOORS.forEach((d, i) => { const k = clamp(Math.sin(t * .8 + i * .7) * 2 - 1); if (k > 0) { drawImg(ICONS[i], d[0], d[2], 56, { alpha: k }); doorway(d, k, (x, y) => charImg(i, 'observe', x, y + 6, 100)); } });
       drawImg('p0', SIGN[0] + 120, SIGN[1] + 150, 170, { anchor: 'bottom' });
     },
+    onFinish() { FX.smoke(PED[0], PED[1] - 20, 10, '#bfefff'); },
     winBanner: r => '🗝️ Phòng bí mật thuộc về ' + r.winner.name + '!',
     winPos: () => ({ x: PED[0], y: PED[1] - 120 })
   };

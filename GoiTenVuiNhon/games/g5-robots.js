@@ -11,7 +11,7 @@
   GAME_IMPL.g5 = {
     id: 'g5', title: 'Nhà máy robot lỗi nhẹ', base: 'assets/g5/', titleY: 470,
     assets: gAssets(['idle', 'action', 'almost', 'fake', 'twist', 'win'], ['p0', 'p1', 'p2', 'p3', 'p11', 'p23', 'p28', 'p30', 'p31', 'p18', 'p24']),
-    startBanner: '🤖 Băng chuyền khởi động!',
+    startBanner: '🤖 Băng chuyền khởi động!', mote: '#9ff3ff', rayColor: '#a8fff0',
 
     setup(r) {
       const m = Math.max(3, Math.round((r.TW - .8) * 1.1));      // slots travelled before the reveal
@@ -37,10 +37,10 @@
       }
       const D = r.decoy, Wn = r.winner, S = r.plain ? Wn : D;
       if (te > 0) cue('a', () => { Music.play('tension'); r.banner = '🔍 Máy quét dừng lại ở ' + S.name + '…'; });
-      if (te > .4) cue('b', () => { SFX.heartbeat(); outcome(r.plain ? 'selected' : 'almost_selected', S); r.banner = '✅ Máy đóng dấu: ' + S.name + '!'; });
+      if (te > .4) cue('b', () => { FX.metal(X0 + 4 * STEP, BELT_Y - KID_H - 10, 22); FX.ring(X0 + 4 * STEP, BELT_Y - KID_H * .55, '#ffd84a', 120); SFX.heartbeat(); outcome(r.plain ? 'selected' : 'almost_selected', S); r.banner = '✅ Máy đóng dấu: ' + S.name + '!'; });
       if (!r.plain) {
         if (te > .9) cue('c', () => { outcome('wrong_turn', D); [0, .25, .5, .75].forEach(d => SFX.tone(d % .5 ? 660 : 880, .22, { type: 'square', vol: .07, delay: d })); SFX.noise(.4, { vol: .2, f: 3000 }); r.banner = '🚨 LỖI! Máy đóng dấu nhầm rồi!'; });
-        if (te > 1.3) cue('d', () => { SFX.swoosh(); r.banner = '⏪ Băng chuyền chạy ngược!'; });
+        if (te > 1.3) cue('d', () => { FX.metal(X0, BELT_Y + 10, 14); FX.metal(X0 + 9 * STEP, BELT_Y + 10, 14); SFX.swoosh(); r.banner = '⏪ Băng chuyền chạy ngược!'; });
         if (te > 1.6) cue('e', () => { outcome('selected', Wn); SFX.wheee(); r.banner = '🔋 Robot cuối hàng tiến tới bục sạc!'; });
       } else if (te > 1.1) cue('e', () => { SFX.wheee(); r.banner = '🔋 ' + Wn.name + ' tiến tới bục sạc!'; });
     },
@@ -58,7 +58,7 @@
       // charging pad + scanner
       drawImg('p31', PAD[0], PAD[1] + 10, 190, { anchor: 'bottom', alpha: .6 + .4 * Math.sin(rt * 4) });
       const err = !r.plain && te > .9 && !done;
-      drawImg('p11', SCAN_X, BELT_Y - 10, 26, { anchor: 'bottom', alpha: te < 0 || te < .9 ? .55 + .2 * Math.sin(rt * 9) : 0 });
+      if (te < .9 && !done) FX.beam(SCAN_X, BELT_Y - 330, BELT_Y + 4, 70, rt, err ? '#ff5d5d' : '#5dff9a');
       drawImg(err ? 'p0' : te > 0 && !done ? 'p2' : done ? 'p3' : 'p1', SCAN_X + 150, BELT_Y - 150, 170, { anchor: 'bottom', flip: true });
       if (err) { const on = Math.sin(rt * 14) > 0; drawImg('p23', SCAN_X + 150, BELT_Y - 330, 80, { anchor: 'bottom', alpha: on ? 1 : .35 }); }
       // robots on the belt
@@ -70,7 +70,7 @@
         if (te > 0) ps = 'idle';
         if (p === S && te > .4) ps = r.plain ? 'fake' : te < .9 ? 'fake' : 'twist';
         if (!r.plain && te > 1.3 && p !== Wn) { ps = 'twist'; rot = Math.sin(rt * 12 + p.seed * 9) * .08; }
-        if (p === Wn && te > (r.plain ? 1.1 : 1.6)) { const [px, py, k] = this.toPad(r, te); x = px; y = py; h = KID_H * (1 + k * .25); ps = 'idle'; }
+        if (p === Wn && te > (r.plain ? 1.1 : 1.6)) { const [px, py, k] = this.toPad(r, te); if (k > .6) FX.every(r, 'charge', .12, () => FX.bolts(PAD[0], PAD[1] - 60, 2, 90)); x = px; y = py; h = KID_H * (1 + k * .25); ps = 'idle'; }
         if (done && p === Wn) continue;
         const bob = te < 0 ? Math.abs(Math.sin(rt * 6 + p.seed * 5)) * 4 : 0;
         charImg(p.av, pose(p.av, ps), x, y - bob, h, { rot, alpha });
@@ -89,6 +89,7 @@
           ctx.fillStyle = '#fff'; ctx.font = '900 34px "Baloo 2","Segoe UI",sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(bad ? '✗' : '✓', sx, BELT_Y - KID_H * .55 + 2); ctx.restore();
         }
       }
+      if (err && te < 2) FX.every(r, 'zap', .16, () => { FX.bolts(SCAN_X + 150, BELT_Y - 230, 3, 120, '#ffe066'); FX.smoke(SCAN_X + 170, BELT_Y - 260, 2, '#9aa5b1'); });
       if (!r.plain && te > .9 && te < 2 && !done) {
         drawImg('p28', SCAN_X + 60, BELT_Y - 200, 120 * (.8 + .2 * Math.sin(rt * 20)), { alpha: .9 });
         drawImg('p30', SCAN_X + 180, BELT_Y - 260 - (te - .9) * 60, 200, { alpha: 1 - clamp((te - 1.4) / .6) });
@@ -108,6 +109,7 @@
         charImg(k, 'idle', x, BELT_Y - Math.abs(Math.sin(t * 6 + k)) * 4, KID_H, { alpha: x < 200 ? clamp((x - 150) / 50) : 1 });
       }
     },
+    onFinish() { FX.bolts(PAD[0], PAD[1] - 80, 8, 150); FX.ring(PAD[0], PAD[1], '#7cf7ff', 220); FX.metal(PAD[0], PAD[1] - 40, 30); },
     winBanner: r => '🔋 ' + r.winner.name + ' sạc đầy năng lượng!',
     winPos: () => ({ x: PAD[0], y: PAD[1] - 120 })
   };

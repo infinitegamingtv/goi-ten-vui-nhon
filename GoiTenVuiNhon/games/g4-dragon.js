@@ -30,7 +30,7 @@
     assets: gAssets(['twist', 'win'], ['dragon_01', 'dragon_02', 'dragon_03', 'dragon_04', 'dragon_05', 'dragon_06', 'dragon_07',
       'chest_01', 'chest_02', 'chest_03', 'chest_04', 'chest_05', 'chest_06', 'chest_07', 'chest_08', 'chest_09', 'chest_10',
       'rubber_duck', 'gold_coins', 'sneeze_smoke', 'winner_spotlight', 'giant_key']),
-    startBanner: '💰 Các rương kho báu nhảy múa đổi chỗ!',
+    startBanner: '💰 Các rương kho báu nhảy múa đổi chỗ!', mote: '#ffe08a', rayColor: '#ffe08a',
 
     setup(r) {
       const slots = spread(r.players.length);
@@ -66,19 +66,19 @@
 
     tick(r, t, te) {
       const f = activeFake(r, t), D = r.decoy, Wn = r.winner;
-      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🐉 Rồng đánh hơi rương của ' + f.p.name + '…'; SFX.leader(); });
+      if (f && te < 0) cue('fk' + f.at, () => { r.banner = '🐉 Rồng đánh hơi rương của ' + f.p.name + '…'; SFX.leader(); const o = layout(r, t).get(f.p); FX.smoke(o.x + 70, o.y - 60, 4, '#f2e8d8'); });
       for (const s of r.swaps) if (t > s.at && te < 0) cue('sw' + s.at, () => SFX.tone(500, .12, { type: 'triangle', vol: .08, to: 900 }));
       if (!r.plain) {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D); r.banner = '🐉 Rồng mở rương của ' + D.name + '!'; });
-        if (te > .6) cue('b', () => { outcome('wrong_turn', D); SFX.quack(0, 2.2); SFX.quack(.2, 2.5); SFX.sadTrombone(); r.banner = '🦆 Ơ! Trong rương chỉ có vịt cao su!'; });
-        if (te > 1.1) cue('c', () => { SFX.noise(.25, { vol: .2, f: 400, to: 1800, q: 1 }); SFX.noise(.5, { vol: .35, f: 2500, to: 500, q: .7, delay: .3 }); r.banner = '🤧 Hắt… XÌÌÌ!'; });
+        if (te > .6) cue('b', () => { const o = r.final.get(D); FX.glitter(o.x, o.y - 60, 10, ['#fff3a0']); outcome('wrong_turn', D); SFX.quack(0, 2.2); SFX.quack(.2, 2.5); SFX.sadTrombone(); r.banner = '🦆 Ơ! Trong rương chỉ có vịt cao su!'; });
+        if (te > 1.1) cue('c', () => { SFX.noise(.25, { vol: .2, f: 400, to: 1800, q: 1 }); SFX.noise(.5, { vol: .35, f: 2500, to: 500, q: .7, delay: .3 }); r.banner = '🤧 Hắt… XÌÌÌ!'; const o = r.final.get(D); FX.smoke(o.x - 20, o.y - 90, 16, '#f6f0e6'); FX.coins(1440, 440, 22, 640); FX.coins(180, 430, 22, 640); FX.coins(o.x, o.y - 40, 14, o.y + 20); });
         if (te > 1.5) cue('d', () => { outcome('selected', Wn); SFX.wheee(); r.banner = '✨ Một chiếc rương trượt ra khỏi đống vàng!'; });
       } else {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🐉 Rồng ngửi rương của ' + (D || Wn).name + '…'; });
         if (te > .8) cue('b', () => { SFX.boing(); r.banner = '🙅 …không phải rương này!'; });
         if (te > 1.1) cue('c', () => { outcome('selected', Wn); SFX.sparkle(); r.banner = '🐉 Rồng chọn được rương rồi!'; });
       }
-      if (te > 2.7) cue('open', () => { SFX.sparkle(); SFX.pop(); });
+      if (te > 2.7) cue('open', () => { SFX.sparkle(); SFX.pop(); FX.coins(STAGE[0], STAGE[1] - 60, 16, STAGE[1] + 10); FX.sparkle(STAGE[0], STAGE[1] - 70, 30); });
     },
 
     render(r, t) {
@@ -114,6 +114,7 @@
       if (!done && te > slide) {
         const o = r.final.get(Wn), k = ease(clamp((te - slide) / 1)), x = lerp(o.x, STAGE[0], k), y = lerp(o.y, STAGE[1], k);
         Wn.x = x; Wn.y = y - 40;
+        FX.every(r, 'slide', .08, () => FX.glitter(x + (Math.random() - .5) * 120, y - 60, 1));
         if (te < 2.7) drawImg(Wn.chest, x, y, CHEST_W * (1 + k * .4), { anchor: 'bottom', rot: Math.sin(rt * 20) * .04 * (1 - k) });
         else charImg(Wn.av, 'win', x, y + 10, 220);
         tagC(Wn.name, x, y + 30, true);
@@ -129,6 +130,7 @@
       SLABS.forEach(([x, y], i) => drawImg('chest_' + String(i + 1).padStart(2, '0'), x, y + 14 - Math.abs(Math.sin(t * 2 + i)) * 6, CHEST_W, { anchor: 'bottom' }));
       drawImg('dragon_01', 800 + Math.sin(t * .6) * 520, 770, 230, { anchor: 'bottom', flip: Math.cos(t * .6) < 0 });
     },
+    onFinish() { FX.coins(STAGE[0], STAGE[1] - 120, 36, STAGE[1] + 20); },
     winBanner: r => '💎 Kho báu thuộc về ' + r.winner.name + '!',
     winPos: () => ({ x: STAGE[0], y: STAGE[1] - 130 })
   };

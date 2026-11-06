@@ -31,7 +31,7 @@
     assets: gAssets(['idle', 'twist', 'win'],
       [...ORBS, 'golden_sphere', 'golden_orb_to_bubbles', 'bubble_cluster', 'cauldron', 'stone_pedestal', 'smoke_green', 'smoke_purple', 'smoke_pink',
         'frog_ready', 'frog_jump', 'frog_staff', 'frog_point_true', 'frog_shocked', 'frog_bow', 'vfx_burst_orb', 'vfx_burst_flower', 'vfx_gold_trail', 'star_cluster']),
-    startBanner: '🔮 Các quả cầu phép bắt đầu xoay quanh nồi!',
+    startBanner: '🔮 Các quả cầu phép bắt đầu xoay quanh nồi!', mote: '#d6b8ff', rayColor: '#e6ccff',
 
     setup(r) {
       r.players.forEach((p, i) => { p.i = i; p.a0 = i / r.players.length * Math.PI * 2; });
@@ -48,17 +48,17 @@
       if (te < 0 && Math.random() < .02) SFX.tone(300 + Math.random() * 300, .12, { vol: .05, to: 700 });   // bubbling
       if (!r.plain) {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D); SFX.swoosh(); r.banner = '✨ Quả cầu vàng phun lên bục công bố!'; });
-        if (te > .9) cue('b', () => { outcome('wrong_turn', D); SFX.bubbles(); SFX.sadTrombone(); r.banner = '🫧 Ơ! Quả cầu vàng hóa bong bóng xà phòng!'; });
+        if (te > .9) cue('b', () => { outcome('wrong_turn', D); FX.bubbles(POD.x, TOP - 60, 26, '#d8f7ff'); SFX.bubbles(); SFX.sadTrombone(); r.banner = '🫧 Ơ! Quả cầu vàng hóa bong bóng xà phòng!'; });
         if (te > 1.3) cue('c', () => { SFX.boing(); r.banner = '🐸 Chú ếch giành lấy đũa phép…'; });
-        if (te > 1.7) cue('d', () => { outcome('selected', Wn); SFX.sparkle(); r.banner = '🪄 …và chỉ đúng quả cầu thật!'; });
+        if (te > 1.7) cue('d', () => { FX.line(520, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🪄 …và chỉ đúng quả cầu thật!'; });
       } else {
         if (te > 0) cue('a', () => { Music.play('tension'); outcome('almost_selected', D || Wn); r.banner = '🔮 Quả cầu của ' + (D || Wn).name + ' bay lên…'; });
         if (te > .9) cue('b', () => { SFX.boing(); r.banner = '😮 …rồi lại rơi xuống!'; });
-        if (te > 1) cue('c', () => { outcome('selected', Wn); SFX.sparkle(); r.banner = '🐸 Chú ếch chỉ đũa phép vào quả cầu này!'; });
+        if (te > 1) cue('c', () => { FX.line(FROG.x + 60, FROG.y - 150, Wn.x, Wn.y - 40, 22); outcome('selected', Wn); SFX.sparkle(); r.banner = '🐸 Chú ếch chỉ đũa phép vào quả cầu này!'; });
       }
       const fly = r.plain ? 1.3 : 1.9, pop = r.plain ? 2.6 : 2.8;
       if (te > fly) cue('fly', () => { SFX.wheee(); });
-      if (te > pop) cue('pop', () => { SFX.pop(); SFX.sparkle(); addFx('vfx_burst_flower', POD.x, TOP - 40, 260, .6); });
+      if (te > pop) cue('pop', () => { SFX.pop(); SFX.sparkle(); addFx('vfx_burst_flower', POD.x, TOP - 40, 260, .6); FX.sparkle(POD.x, TOP - 60, 36, ['#ffd84a', '#e0b3ff', '#7cf7ff']); });
     },
 
     render(r, t) {
@@ -76,7 +76,8 @@
           if (te < .8) [x, y] = arc([x, y], [POD.x, TOP - 60], ease(te / .8), 160); else { x = POD.x; y = TOP - 60; }
           if (te > .9) hide = true;
         }
-        if (p === Wn && te > fly) { const k = ease(clamp((te - fly) / (pop - fly))); [x, y] = arc(orbitPos(r, p, r.stopAt), [POD.x, TOP - 60], k, 200); if (k > 0 && k < 1 && rt - (r.lastTrail || 0) > .07 && (r.lastTrail = rt)) r.fx.push({ img: 'vfx_gold_trail', x, y: y + 30, w: 120, t0: rt, dur: .35 }); depth = 2; }
+        if (p === Wn && te > fly) { const k = ease(clamp((te - fly) / (pop - fly))); [x, y] = arc(orbitPos(r, p, r.stopAt), [POD.x, TOP - 60], k, 200); if (k > 0 && k < 1) FX.every(r, 'orbtrail', .04, () => FX.glitter(x, y, 2, ['#ffd84a', '#ffffff']));
+        if (k > 0 && k < 1 && rt - (r.lastTrail || 0) > .07 && (r.lastTrail = rt)) r.fx.push({ img: 'vfx_gold_trail', x, y: y + 30, w: 120, t0: rt, dur: .35 }); depth = 2; }
         if (p === Wn && (te > pop || done)) hide = true;
         pos.set(p, { x, y, depth, size, golden, alpha, hide });
         p.x = x; p.y = y + 40;
@@ -94,6 +95,7 @@
       // cauldron with smoke
       ['smoke_green', 'smoke_purple', 'smoke_pink'].forEach((s, i) => { const k = (rt * .5 + i / 3) % 1; drawImg(s, C.x - 40 + i * 40, C.y - 30 - k * 160, 110 + k * 60, { alpha: (1 - k) * .8, anchor: 'bottom' }); });
       drawImg('cauldron', C.x, C.y + 110, 300, { anchor: 'bottom' });
+      if (!done) FX.every(r, 'brew', .12, () => FX.bubbles(C.x + (Math.random() - .5) * 140, C.y - 20, 1, Math.random() < .5 ? '#b6ff9e' : '#e0b3ff'));
       front.forEach(drawOrb);
       // golden orb bursting into bubbles
       if (!r.plain && D && te > .9 && !done) {
