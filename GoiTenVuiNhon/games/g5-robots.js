@@ -4,9 +4,7 @@
 (() => {
   const X0 = 240, STEP = 130.6, BELT_Y = 650, KID_H = 150, SCAN_X = 763;
   const PAD = [1457, 432];
-  // a few cut-out poses are damaged in the source art: use idle instead for those
-  const BROKEN = { 3: ['ready', 'twist'], 5: ['action', 'fake', 'twist'], 9: ['action', 'fake', 'ready', 'twist'] };
-  const pose = (av, p) => (BROKEN[av] || []).includes(p) ? 'idle' : p;
+  const pose = (av, p) => p;   // every pose is usable since the source sprites were repaired
 
   GAME_IMPL.g5 = {
     id: 'g5', title: 'Faulty Robot Factory', base: 'assets/g5/', titleY: 470,
